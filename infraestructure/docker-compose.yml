@@ -1,0 +1,40 @@
+version: '3.8'
+
+services:
+  # 1. BASE DE DATOS RELACIONAL Y ESPACIAL (Java + Python)
+  postgres:
+    image: postgis/postgis:15-3.3
+    container_name: delivery-postgres
+    environment:
+      POSTGRES_USER: superapp_user
+      POSTGRES_PASSWORD: superapp_password
+      POSTGRES_DB: delivery_superapp
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  # 2. MOTOR EN MEMORIA PARA TRACKING GPS (Go)
+  redis:
+    image: redis:alpine
+    container_name: delivery-redis
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+
+  # 3. BUS DE MENSAJES ASÍNCRONO (Node.js + Java)
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: delivery-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: admin
+      RABBITMQ_DEFAULT_PASS: admin123
+    ports:
+      - "5672:5672"   # Puerto interno de comunicación
+      - "15672:15672" # Puerto del panel web de administración
+    restart: unless-stopped
+
+# Volúmenes para no perder datos si apagas la PC
+volumes:
+  pgdata:

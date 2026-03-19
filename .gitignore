@@ -1,0 +1,45 @@
+# 1. Entornos e IDEs (IntelliJ, VSCode, OS)
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+.DS_Store
+Thumbs.db
+
+# 2. Node.js & React Native (Frontends y Gateway)
+node_modules/
+npm-debug.log
+yarn-error.log
+.expo/
+.next/
+out/
+build/
+dist/
+.env
+
+# 3. Java Spring Boot (Core Transaccional)
+target/
+*.class
+*.jar
+*.war
+.mvn/
+!/.mvn/wrapper/maven-wrapper.jar
+
+# 4. Python (IA y Matchmaking)
+venv/
+env/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+
+# 5. Go (Tracking)
+/microservices/live-tracking/live-tracking.exe
+/microservices/live-tracking/live-tracking
+
+# 6. Infraestructura (¡VITAL!)
+infrastructure/pgdata/
