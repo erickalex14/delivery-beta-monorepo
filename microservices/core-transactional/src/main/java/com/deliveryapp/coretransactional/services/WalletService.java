@@ -4,7 +4,9 @@ import com.deliveryapp.coretransactional.dtos.request.Wallets.TopUpWalletRequest
 import com.deliveryapp.coretransactional.dtos.response.Wallets.WalletBalanceResponse;
 import com.deliveryapp.coretransactional.dtos.request.Wallets.CreateWalletRequest;
 import com.deliveryapp.coretransactional.dtos.request.Wallets.DebitWalletRequest;
+import com.deliveryapp.coretransactional.dtos.response.Wallets.WalletMovementResponse;
 
+import java.util.List;
 import java.util.UUID;
 
 public interface WalletService {
@@ -14,4 +16,6 @@ public interface WalletService {
     WalletBalanceResponse createWallet(CreateWalletRequest request);
 
     WalletBalanceResponse debitWallet(UUID driverId, DebitWalletRequest request);
+
+    List<WalletMovementResponse> getMovementsHistory(UUID driverId);
 }

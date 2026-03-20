@@ -4,6 +4,7 @@ import com.deliveryapp.coretransactional.dtos.request.Wallets.CreateWalletReques
 import com.deliveryapp.coretransactional.dtos.request.Wallets.DebitWalletRequest;
 import com.deliveryapp.coretransactional.dtos.request.Wallets.TopUpWalletRequest;
 import com.deliveryapp.coretransactional.dtos.response.Wallets.WalletBalanceResponse;
+import com.deliveryapp.coretransactional.dtos.response.Wallets.WalletMovementResponse;
 import com.deliveryapp.coretransactional.models.LedgerEntry;
 import com.deliveryapp.coretransactional.models.LedgerPosting;
 import com.deliveryapp.coretransactional.models.Wallet;
@@ -16,6 +17,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.UUID;
 
 @Service // Le dice a Spring que este es el Chef Oficial
@@ -25,7 +27,8 @@ public class WalletServiceImpl implements WalletService {
     // Traemos al Bodeguero (Repository) para buscar datos
     private final WalletRepository walletRepository;
     private final LedgerEntryRepository ledgerEntryRepository; // Para registrar cada movimiento en el libro contable
-    private final LedgerPostingRepository ledgerPostingRepository; // Para registrar cada asiento contable relacionado con las transacciones de la billetera
+    private final LedgerPostingRepository ledgerPostingRepository;
+    // Para registrar cada asiento contable relacionado con las transacciones de la billetera
 
 
     // Este método es el encargado de recargar la billetera del conductor. Sigue los pasos de buscar la billetera, sumar el saldo, actualizar y guardar los cambios, y finalmente responder con el nuevo balance.
@@ -127,5 +130,25 @@ public class WalletServiceImpl implements WalletService {
                 .balance(wallet.getBalance())
                 .currency(wallet.getCurrency())
                 .build();
+    }
+
+
+    //Metodo para obtener el historial de movimientos de la billetera
+    @Override
+    @Transactional(readOnly = true) //Solo lectura, no modifica nada
+    public List<WalletMovementResponse> getMovementHistory(UUID driverId){
+        //Validar que la billetera exista
+        Wallet wallet = walletRepository.findByUserId(driverId)
+                .orElseThrow(() -> new RuntimeException("¡Error! No se encontro la billetera"));
+        //Obtener los movimientos (LedgerPostings) relacionados con esta billetera
+        return ledgerPostingRepository.findByWalletUserIdOrderByCreatedAtDesc(driverId)
+                .stream()
+                .map(posting -> WalletMovementResponse.builder()
+                        .description(posting.getLedgerEntry().getDescription())
+                        .amount(posting.getAmount())
+                        .direction(posting.getDirection())
+                        .date(posting.getCreatedAt())
+                        .build())
+                .toList();
     }
 }
