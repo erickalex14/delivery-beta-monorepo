@@ -4,7 +4,11 @@ import com.deliveryapp.coretransactional.dtos.request.Wallets.CreateWalletReques
 import com.deliveryapp.coretransactional.dtos.request.Wallets.DebitWalletRequest;
 import com.deliveryapp.coretransactional.dtos.request.Wallets.TopUpWalletRequest;
 import com.deliveryapp.coretransactional.dtos.response.Wallets.WalletBalanceResponse;
+import com.deliveryapp.coretransactional.models.LedgerEntry;
+import com.deliveryapp.coretransactional.models.LedgerPosting;
 import com.deliveryapp.coretransactional.models.Wallet;
+import com.deliveryapp.coretransactional.repositories.LedgerEntryRepository;
+import com.deliveryapp.coretransactional.repositories.LedgerPostingRepository;
 import com.deliveryapp.coretransactional.repositories.WalletRepository;
 import com.deliveryapp.coretransactional.services.WalletService;
 import lombok.RequiredArgsConstructor;
@@ -20,34 +24,45 @@ public class WalletServiceImpl implements WalletService {
 
     // Traemos al Bodeguero (Repository) para buscar datos
     private final WalletRepository walletRepository;
+    private final LedgerEntryRepository ledgerEntryRepository; // Para registrar cada movimiento en el libro contable
+    private final LedgerPostingRepository ledgerPostingRepository; // Para registrar cada asiento contable relacionado con las transacciones de la billetera
 
-    @Override //Implementamos el método definido en la interfaz WalletService
-    @Transactional //Si falla algo, hace Rollback automático
 
     // Este método es el encargado de recargar la billetera del conductor. Sigue los pasos de buscar la billetera, sumar el saldo, actualizar y guardar los cambios, y finalmente responder con el nuevo balance.
+    @Override //Implementamos el método definido en la interfaz WalletService
+    @Transactional //Si falla algo, hace Rollback automático
     public WalletBalanceResponse topUpWallet(UUID driverId, TopUpWalletRequest request) {
-
-        // 1. BUSCAR: Le pedimos al bodeguero que busque la billetera usando el driverId que nos pasaron por parámetro
+        // buscar la billetera del conductor por su ID
         Wallet wallet = walletRepository.findByUserId(driverId)
-                .orElseThrow(() -> new RuntimeException("¡Error! Billetera no encontrada para este conductor"));
+                .orElseThrow(() -> new RuntimeException("¡Error! No se encontro la billetera"));
 
-        // 2. LÓGICA DE NEGOCIO: Sumamos el saldo.
-        // OJO: En Java BigDecimal no usa el símbolo '+', usa el método '.add()'
-        BigDecimal newBalance = wallet.getBalance().add(request.getAmount());
+        //crear el recibo (LedgerEntry) para esta recarga
+        LedgerEntry entry = new LedgerEntry();
+        entry.setReferenceType("TOP_UP");
+        entry.setDescription("Recarga de saldo a la billetera");
+        //entry.setReferenceId(Aqui iria el id de la ordea, talvez id de la transferencia o algo asi, pero por ahora lo dejamos null porque no tenemos esa logica implementada);
+        ledgerEntryRepository.save(entry);
 
-        // 3. ACTUALIZAR: Usamos el Setter manual que dejamos en la entidad
-        wallet.setBalance(newBalance);
+        //crear el asiento contable (LedgerPosting) para esta recarga
+        LedgerPosting posting = new LedgerPosting();
+        posting.setLedgerEntry(entry);
+        posting.setWallet(wallet);
+        posting.setAmount(request.getAmount());
+        posting.setDirection("CREDIT"); // Es una recarga, así que es un crédito
+        ledgerPostingRepository.save(posting);
 
-        // 4. GUARDAR: Le decimos al bodeguero que guarde los cambios en PostgreSQL
+        // sumar el monto de la recarga al balance actual de la billetera (cache)
+        wallet.setBalance(wallet.getBalance().add(request.getAmount()));
         walletRepository.save(wallet);
 
-        // 5. RESPONDER: Construimos el DTO de salida sin exponer datos sensibles
+        // responder con el nuevo balance de la billetera
         return WalletBalanceResponse.builder()
                 .driverId(wallet.getUserId())
                 .balance(wallet.getBalance())
                 .currency(wallet.getCurrency())
                 .build();
     }
+
 
 
     //Creacion de una billetera para un nuevo conductor (Ojo aqui es donde pel microservicio de node hara la llamada para crear la billetera cuando un usuario se rregistre en su logica)
@@ -78,22 +93,35 @@ public class WalletServiceImpl implements WalletService {
     @Override
     @Transactional
     public WalletBalanceResponse debitWallet(UUID driverId, DebitWalletRequest request) {
-        //Validad que existe la billetera
+        //Validar que la billetera exista
         Wallet wallet = walletRepository.findByUserId(driverId)
                 .orElseThrow(() -> new RuntimeException("¡Error! No se encontro la billetera"));
-        //Validar que el saldo sea suficiente para el débito
-        if (wallet.getBalance().compareTo(request.getAmount()) < 0) {
-            throw new RuntimeException("¡Error! Saldo insuficiente para esta operación");
+
+        //Validar que haya suficiente saldo para debitar
+        if(wallet.getBalance().compareTo(request.getAmount()) < 0){
+            throw new RuntimeException("¡Error! Saldo insuficiente en la billetera");
         }
 
-        //Realizar el débito restando el monto al balance actual
-        BigDecimal newBalance = wallet.getBalance().subtract(request.getAmount());
-        wallet.setBalance(newBalance);
+        //crear el recibo (LedgerEntry) para esta transacción
+        LedgerEntry entry = new LedgerEntry();
+        entry.setReferenceType("ORDER_COMISSION");
+        entry.setDescription("Comisión por servicio realizado");
+        //entry.setReferenceId(Aqui iria el id de la orden o el viaje cuando se implemente esa logica);
+        ledgerEntryRepository.save(entry);
 
-        //Guardar los cambios en la base de datos
+        //crear el asiento contable (LedgerPosting) para esta transacción
+        LedgerPosting posting = new LedgerPosting();
+        posting.setLedgerEntry(entry);
+        posting.setWallet(wallet);
+        posting.setAmount(request.getAmount());
+        posting.setDirection("DEBIT"); // Es un débito porque se está descontando dinero
+        ledgerPostingRepository.save(posting);
+
+        // restar el monto del débito al balance actual de la billetera (cache)
+        wallet.setBalance(wallet.getBalance().subtract(request.getAmount()));
         walletRepository.save(wallet);
 
-        //Responder con el nuevo balance después del débito
+        // responder con el nuevo balance de la billetera
         return WalletBalanceResponse.builder()
                 .driverId(wallet.getUserId())
                 .balance(wallet.getBalance())
