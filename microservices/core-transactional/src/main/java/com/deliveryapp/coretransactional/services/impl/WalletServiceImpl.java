@@ -16,7 +16,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 
@@ -133,10 +132,10 @@ public class WalletServiceImpl implements WalletService {
     }
 
 
-    //Metodo para obtener el historial de movimientos de la billetera
+    //Obtener el historial de movimientos de la billetera, mostrando la descripción, monto, dirección (crédito o débito) y fecha de cada movimiento. Se ordena por fecha descendente para mostrar primero los movimientos más recientes.
     @Override
-    @Transactional(readOnly = true) //Solo lectura, no modifica nada
-    public List<WalletMovementResponse> getMovementHistory(UUID driverId){
+    @Transactional(readOnly = true)
+    public List<WalletMovementResponse> getMovementHistory(UUID driverId) {
         //Validar que la billetera exista
         Wallet wallet = walletRepository.findByUserId(driverId)
                 .orElseThrow(() -> new RuntimeException("¡Error! No se encontro la billetera"));
@@ -151,4 +150,6 @@ public class WalletServiceImpl implements WalletService {
                         .build())
                 .toList();
     }
+
+
 }

@@ -4,12 +4,14 @@ import com.deliveryapp.coretransactional.dtos.request.Wallets.CreateWalletReques
 import com.deliveryapp.coretransactional.dtos.request.Wallets.TopUpWalletRequest;
 import com.deliveryapp.coretransactional.dtos.response.Wallets.WalletBalanceResponse;
 import com.deliveryapp.coretransactional.dtos.request.Wallets.DebitWalletRequest;
+import com.deliveryapp.coretransactional.dtos.response.Wallets.WalletMovementResponse;
 import com.deliveryapp.coretransactional.services.WalletService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.UUID;
 
 @RestController // Le dice a Spring que este mesero responde con JSON, no con páginas web HTML
@@ -50,4 +52,13 @@ public class WalletController {
         return ResponseEntity.ok(response);
     }
 
+        // Endpoint para obtener el historial de movimientos de la billetera
+        @GetMapping("/{driverId}/history")
+        public ResponseEntity<List<WalletMovementResponse>> getHistory(
+                @PathVariable UUID driverId){
+            // El Service devuelve movimientos, así que el Controller debe esperar movimientos
+            List<WalletMovementResponse> history = walletService.getMovementHistory(driverId);
+
+            return ResponseEntity.ok(history);
+        }
 }
