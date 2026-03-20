@@ -3,6 +3,7 @@ package com.deliveryapp.coretransactional.controllers;
 import com.deliveryapp.coretransactional.dtos.request.Wallets.CreateWalletRequest;
 import com.deliveryapp.coretransactional.dtos.request.Wallets.TopUpWalletRequest;
 import com.deliveryapp.coretransactional.dtos.response.Wallets.WalletBalanceResponse;
+import com.deliveryapp.coretransactional.dtos.request.Wallets.DebitWalletRequest;
 import com.deliveryapp.coretransactional.services.WalletService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -38,6 +39,15 @@ public class WalletController {
             @Valid @RequestBody CreateWalletRequest request) {
         WalletBalanceResponse response = walletService.createWallet(request);
         return ResponseEntity.status(201).body(response); // 201 Created
+    }
+
+    // Endpoint para debitar la billetera
+    @PostMapping("/{driverId}/debit")
+    public ResponseEntity<WalletBalanceResponse> debitWallet(
+            @PathVariable UUID driverId,
+            @Valid @RequestBody DebitWalletRequest request) {
+        WalletBalanceResponse response = walletService.debitWallet(driverId, request);
+        return ResponseEntity.ok(response);
     }
 
 }

@@ -6,9 +6,9 @@ spring:
     name: core-transactional
 
   datasource:
-    url: jdbc:postgresql://localhost:5432/delivery_superapp
+    url: jdbc:postgresql://localhost:5433/delivery_superapp
     username: superapp_user
-    password: superapp_password
+    password: Miloj2210_
     driver-class-name: org.postgresql.Driver
 
   jpa:
@@ -19,3 +19,4 @@ spring:
     properties:
       hibernate:
         format_sql: true
+        hbm2ddl.create_namespaces: true

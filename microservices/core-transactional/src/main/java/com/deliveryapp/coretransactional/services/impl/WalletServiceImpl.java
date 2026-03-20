@@ -1,6 +1,7 @@
 package com.deliveryapp.coretransactional.services.impl;
 
 import com.deliveryapp.coretransactional.dtos.request.Wallets.CreateWalletRequest;
+import com.deliveryapp.coretransactional.dtos.request.Wallets.DebitWalletRequest;
 import com.deliveryapp.coretransactional.dtos.request.Wallets.TopUpWalletRequest;
 import com.deliveryapp.coretransactional.dtos.response.Wallets.WalletBalanceResponse;
 import com.deliveryapp.coretransactional.models.Wallet;
@@ -70,6 +71,33 @@ public class WalletServiceImpl implements WalletService {
                 .driverId(newWallet.getUserId())
                 .balance(newWallet.getBalance())
                 .currency(newWallet.getCurrency())
+                .build();
+    }
+
+    //Metodo para debitar saldo de la billetera
+    @Override
+    @Transactional
+    public WalletBalanceResponse debitWallet(UUID driverId, DebitWalletRequest request) {
+        //Validad que existe la billetera
+        Wallet wallet = walletRepository.findByUserId(driverId)
+                .orElseThrow(() -> new RuntimeException("¡Error! No se encontro la billetera"));
+        //Validar que el saldo sea suficiente para el débito
+        if (wallet.getBalance().compareTo(request.getAmount()) < 0) {
+            throw new RuntimeException("¡Error! Saldo insuficiente para esta operación");
+        }
+
+        //Realizar el débito restando el monto al balance actual
+        BigDecimal newBalance = wallet.getBalance().subtract(request.getAmount());
+        wallet.setBalance(newBalance);
+
+        //Guardar los cambios en la base de datos
+        walletRepository.save(wallet);
+
+        //Responder con el nuevo balance después del débito
+        return WalletBalanceResponse.builder()
+                .driverId(wallet.getUserId())
+                .balance(wallet.getBalance())
+                .currency(wallet.getCurrency())
                 .build();
     }
 }

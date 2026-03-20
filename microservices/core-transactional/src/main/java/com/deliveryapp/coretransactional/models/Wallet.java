@@ -10,6 +10,7 @@ import java.util.UUID;
 
 // Entidad o tabla de la base de datos para la billetera del usuario
 @Entity
+@Table(schema = "finance", name = "wallets")
 public class Wallet {
     //Id de la billetera
     @Id

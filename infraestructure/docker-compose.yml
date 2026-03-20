@@ -7,10 +7,10 @@ services:
     container_name: delivery-postgres
     environment:
       POSTGRES_USER: superapp_user
-      POSTGRES_PASSWORD: superapp_password
+      POSTGRES_PASSWORD: Miloj2210_
       POSTGRES_DB: delivery_superapp
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     restart: unless-stopped
