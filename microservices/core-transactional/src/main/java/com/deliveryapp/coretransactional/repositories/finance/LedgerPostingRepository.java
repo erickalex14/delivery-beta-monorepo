@@ -10,4 +10,10 @@ public interface LedgerPostingRepository  extends  JpaRepository<LedgerPosting, 
     //"Busca por el userId de la Wallet asociada, ordena por fecha descendente"
     List<LedgerPosting> findByWalletUserIdOrderByCreatedAtDesc(UUID userId);
 
+    // Busca todos los movimientos de una billetera en específico
+    List<LedgerPosting> findByWalletIdOrderByCreatedAtDesc(UUID walletId);
+
+    // Auditoría Estricta: Tráeme el débito y el crédito de un asiento contable específico
+    List<LedgerPosting> findByLedgerEntryId(UUID ledgerEntryId);
+
 }

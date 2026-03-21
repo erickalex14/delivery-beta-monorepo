@@ -5,6 +5,7 @@ import com.deliveryapp.coretransactional.dtos.request.Wallets.TopUpWalletRequest
 import com.deliveryapp.coretransactional.dtos.response.Wallets.WalletBalanceResponse;
 import com.deliveryapp.coretransactional.dtos.request.Wallets.DebitWalletRequest;
 import com.deliveryapp.coretransactional.dtos.response.Wallets.WalletMovementResponse;
+import com.deliveryapp.coretransactional.models.finance.Wallet;
 import com.deliveryapp.coretransactional.services.WalletService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -60,5 +61,11 @@ public class WalletController {
             List<WalletMovementResponse> history = walletService.getMovementHistory(driverId);
 
             return ResponseEntity.ok(history);
+        }
+
+        //Auditoría Estricta: Endpoint para obtener el historial de movimientos de la billetera por tenantId
+        @GetMapping("/tenant/{tenantId}")
+        public ResponseEntity<List<Wallet>> getWalletsByTenant(@PathVariable UUID tenantId) {
+            return ResponseEntity.ok(walletService.getWalletsByTenantId(tenantId));
         }
 }

@@ -151,5 +151,11 @@ public class WalletServiceImpl implements WalletService {
                 .toList();
     }
 
+    //  Auditoria Multi-tenant: Obtener todas las billeteras asociadas a un tenant específico (Ej: todas las billeteras de una ciudad o franquicia)
+    @Override
+    public List<Wallet> getWalletsByTenantId(UUID tenantId) {
+        return walletRepository.findByTenantId(tenantId);
+    }
+
 
 }
