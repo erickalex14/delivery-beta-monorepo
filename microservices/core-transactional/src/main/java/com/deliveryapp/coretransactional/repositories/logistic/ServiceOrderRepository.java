@@ -9,5 +9,8 @@ import java.util.UUID;
 public interface ServiceOrderRepository extends  JpaRepository<ServiceOrder, UUID> {
     //Aqui despues ira logica con PosGis  para buscar pedidos por cercania
     List<ServiceOrder> findByClientId(UUID clientId);
+    List<ServiceOrder> findByDriverId(UUID driverId);
+    List<ServiceOrder> findByMerchantId(UUID merchantId);
+    List<ServiceOrder> findByType(String type);
 
 }

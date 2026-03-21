@@ -1,11 +1,18 @@
 package com.deliveryapp.coretransactional.services.impl;
 
+import com.deliveryapp.coretransactional.dtos.request.logistic.CreateOrderRequest;
 import com.deliveryapp.coretransactional.services.ServiceOrderService;
 import com.deliveryapp.coretransactional.models.logistic.ServiceOrder;
+import com.deliveryapp.coretransactional.models.logistic.OrderStatus;
+
 import com.deliveryapp.coretransactional.models.logistic.OrderSecurity;
 import com.deliveryapp.coretransactional.repositories.logistic.ServiceOrderRepository;
 import com.deliveryapp.coretransactional.repositories.logistic.OrderSecurityRepository;
+import com.deliveryapp.coretransactional.repositories.logistic.OrderStatusRepository;
 import lombok.RequiredArgsConstructor;
+import org.locationtech.jts.geom.Coordinate;
+import org.locationtech.jts.geom.GeometryFactory;
+import org.locationtech.jts.geom.Point;
 import org.springframework.stereotype.Service;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,27 +26,51 @@ public class ServiceOrderServiceImpl implements ServiceOrderService {
 
     private final ServiceOrderRepository orderRepository;
     private final OrderSecurityRepository securityRepository;
+    private final OrderStatusRepository orderStatusRepository;
     private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
+    private final GeometryFactory geometryFactory = new GeometryFactory();
 
 
     //Crear orden
     @Override
     @Transactional
-    public ServiceOrder createOrder(ServiceOrder order) {
-        // Guardar la orden en la base de datos
+    public ServiceOrder createOrder(CreateOrderRequest request){
+        //Mapear el request a la entidad
+        ServiceOrder order = new ServiceOrder();
+        order.setTenantId(request.getTenantId());
+        order.setType(request.getType());
+        order.setClientId(request.getClientId());
+        order.setMerchantId(request.getMerchantId());
+        order.setTotalAmount(request.getTotalAmount());
+        order.setCurrency(request.getCurrency());
+
+        //Logica Postgis
+        Point origin = geometryFactory.createPoint(new Coordinate(request.getOriginLng(), request.getOriginLat()));
+        Point destination = geometryFactory.createPoint(new Coordinate(request.getDestinationLng(), request.getDestinationLat()));
+        origin.setSRID(4326);
+        destination.setSRID(4326);
+        order.setOrigin(origin);
+        order.setDestination(destination);
+
+        //Estado inicial de la orden
+        OrderStatus initialStatus = orderStatusRepository.findByCodeAndType("CREATED", request.getType())
+                .orElseThrow(() -> new RuntimeException("Estado inicial no encontrado"));
+        order.setStatus(initialStatus);
+
+        //Guardar la orden
         ServiceOrder savedOrder = orderRepository.save(order);
 
-        //Logica de seguridad: PIN 4 digitos
-        String rawPin = String.format("%04d", new SecureRandom().nextInt(10000));
-
+        //Generar código de seguridad para la orden
+        String rawPin = String.format("%04d", new SecureRandom().nextInt(10000)); // Genera un PIN de 4 dígitos
         OrderSecurity security = new OrderSecurity();
         security.setOrder(savedOrder);
         security.setPinHash(passwordEncoder.encode(rawPin));
         securityRepository.save(security);
 
-        //Log para pruebas
-        System.out.println("PIN generado para el pedido " + savedOrder.getId() + ": " + rawPin);
-        return savedOrder;
+        //Log de prueba para mostrar el PIN generado (en producción no se haría esto)
+        System.out.println("Orden creada con ID: " + savedOrder.getId() + " y PIN: " + rawPin);
+
+        return  savedOrder;
     }
 
     //Obtener orden por ID
@@ -48,4 +79,27 @@ public class ServiceOrderServiceImpl implements ServiceOrderService {
         return orderRepository.findById(orderId)
                 .orElseThrow(() -> new RuntimeException("Orden no encontrada"));
     }
+
+    //Obtener por id del cliente
+    @Override
+    public java.util.List<ServiceOrder> getOrdersByClientId(UUID clientId) {
+        return orderRepository.findByClientId(clientId);}
+
+    //Obtener por id del conductor
+    @Override
+    public java.util.List<ServiceOrder> getOrdersByDriverId(UUID driverId) {
+        return orderRepository.findByDriverId(driverId);
+    }
+
+    //Obtener por id del comercio
+    @Override
+    public java.util.List<ServiceOrder> getOrdersByMerchantId(UUID merchantId) {
+        return orderRepository.findByMerchantId(merchantId);
+    }
+
+    //Obtener por tipo de orden
+    @Override
+    public java.util.List<ServiceOrder> getOrdersByType(String type) {
+        return orderRepository.findByType(type);}
+
 }
