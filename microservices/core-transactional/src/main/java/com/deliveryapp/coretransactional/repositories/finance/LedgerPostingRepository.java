@@ -1,6 +1,6 @@
-package com.deliveryapp.coretransactional.repositories;
+package com.deliveryapp.coretransactional.repositories.finance;
 
-import com.deliveryapp.coretransactional.models.LedgerPosting;
+import com.deliveryapp.coretransactional.models.finance.LedgerPosting;
 import org.springframework.data.jpa.repository.JpaRepository;
 import java.util.UUID;
 import java.util.List;

@@ -1,4 +1,4 @@
-package com.deliveryapp.coretransactional.models;
+package com.deliveryapp.coretransactional.models.finance;
 
 import jakarta.persistence.*;
 import lombok.Data;

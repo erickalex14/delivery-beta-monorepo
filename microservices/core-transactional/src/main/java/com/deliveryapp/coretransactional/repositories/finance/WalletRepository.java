@@ -1,6 +1,6 @@
-package com.deliveryapp.coretransactional.repositories;
+package com.deliveryapp.coretransactional.repositories.finance;
 
-import com.deliveryapp.coretransactional.models.Wallet;
+import com.deliveryapp.coretransactional.models.finance.Wallet;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 

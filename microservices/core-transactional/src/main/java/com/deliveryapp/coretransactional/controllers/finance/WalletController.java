@@ -1,4 +1,4 @@
-package com.deliveryapp.coretransactional.controllers;
+package com.deliveryapp.coretransactional.controllers.finance;
 
 import com.deliveryapp.coretransactional.dtos.request.Wallets.CreateWalletRequest;
 import com.deliveryapp.coretransactional.dtos.request.Wallets.TopUpWalletRequest;
