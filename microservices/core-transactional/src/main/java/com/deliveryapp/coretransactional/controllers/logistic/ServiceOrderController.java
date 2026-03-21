@@ -6,11 +6,11 @@ import com.deliveryapp.coretransactional.models.logistic.ServiceOrder;
 import com.deliveryapp.coretransactional.services.ServiceOrderService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
-import java.util.UUID;
 
 import java.util.UUID;
 
@@ -19,7 +19,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class ServiceOrderController {
 
-    private final  ServiceOrderService serviceOrderService;
+    private final ServiceOrderService serviceOrderService;
 
     // Endpoint para crear una orden de servicio
     @PostMapping
@@ -28,54 +28,72 @@ public class ServiceOrderController {
         return ResponseEntity.ok(mapToResponse(savedOrder));
     }
 
-    //Buscar orden por ID
+    // Buscar orden por ID
     @GetMapping("/{id}")
     public ResponseEntity<ServiceOrderResponse> getOrderById(@PathVariable UUID id){
         ServiceOrder order = serviceOrderService.getOrderById(id);
         return ResponseEntity.ok(mapToResponse(order));
     }
 
-    // Encontrar ordenes por cliente
+    // Encontrar ordenes por cliente (CON PAGINACIÓN)
     @GetMapping("/client/{clientId}")
-    public ResponseEntity<List<ServiceOrderResponse>> getOrdersByClientId(@PathVariable UUID clientId){
-        List<ServiceOrderResponse> responses = serviceOrderService.getOrdersByClientId(clientId)
-                .stream()
-                .map(this::mapToResponse)
-                .toList();
+    public ResponseEntity<Page<ServiceOrderResponse>> getOrdersByClientId(
+            @PathVariable UUID clientId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size){
+
+        Pageable pageable = PageRequest.of(page, size);
+
+        // ¡Mira qué limpio! Page ya tiene su propio .map()
+        Page<ServiceOrderResponse> responses = serviceOrderService.getOrdersByClientId(clientId, pageable)
+                .map(this::mapToResponse);
+
         return ResponseEntity.ok(responses);
     }
 
-    //encontrar ordenes por conductor
+    // Encontrar ordenes por conductor (CON PAGINACIÓN)
     @GetMapping("/driver/{driverId}")
-    public ResponseEntity<List<ServiceOrderResponse>> getOrdersByDriverId(@PathVariable UUID driverId){
-        List<ServiceOrderResponse> responses = serviceOrderService.getOrdersByDriverId(driverId)
-                .stream()
-                .map(this::mapToResponse)
-                .toList();
+    public ResponseEntity<Page<ServiceOrderResponse>> getOrdersByDriverId(
+            @PathVariable UUID driverId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size){
+
+        Pageable pageable = PageRequest.of(page, size);
+        Page<ServiceOrderResponse> responses = serviceOrderService.getOrdersByDriverId(driverId, pageable)
+                .map(this::mapToResponse);
+
         return ResponseEntity.ok(responses);
     }
 
-    //encontrar ordenes por comercio
+    // Encontrar ordenes por comercio (CON PAGINACIÓN)
     @GetMapping("/merchant/{merchantId}")
-    public ResponseEntity<List<ServiceOrderResponse>> getOrdersByMerchantId(@PathVariable UUID merchantId){
-        List<ServiceOrderResponse> responses = serviceOrderService.getOrdersByMerchantId(merchantId)
-                .stream()
-                .map(this::mapToResponse)
-                .toList();
+    public ResponseEntity<Page<ServiceOrderResponse>> getOrdersByMerchantId(
+            @PathVariable UUID merchantId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size){
+
+        Pageable pageable = PageRequest.of(page, size);
+        Page<ServiceOrderResponse> responses = serviceOrderService.getOrdersByMerchantId(merchantId, pageable)
+                .map(this::mapToResponse);
+
         return ResponseEntity.ok(responses);
     }
 
-    //encontar por tipo de orden
+    // Encontrar por tipo de orden (CON PAGINACIÓN)
     @GetMapping("/type/{type}")
-    public ResponseEntity<List<ServiceOrderResponse>> getOrdersByType(@PathVariable String type){
-        List<ServiceOrderResponse> responses = serviceOrderService.getOrdersByType(type)
-                .stream()
-                .map(this::mapToResponse)
-                .toList();
+    public ResponseEntity<Page<ServiceOrderResponse>> getOrdersByType(
+            @PathVariable String type,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size){
+
+        Pageable pageable = PageRequest.of(page, size);
+        Page<ServiceOrderResponse> responses = serviceOrderService.getOrdersByType(type, pageable)
+                .map(this::mapToResponse);
+
         return ResponseEntity.ok(responses);
     }
 
-                                                                          // Metodo Helper
+    // Metodo Helper
     private ServiceOrderResponse mapToResponse(ServiceOrder order) {
         return ServiceOrderResponse.builder()
                 .id(order.getId())

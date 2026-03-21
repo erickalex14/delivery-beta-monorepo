@@ -6,9 +6,9 @@ import com.deliveryapp.coretransactional.dtos.request.Wallets.CreateWalletReques
 import com.deliveryapp.coretransactional.dtos.request.Wallets.DebitWalletRequest;
 import com.deliveryapp.coretransactional.dtos.response.Wallets.WalletMovementResponse;
 import com.deliveryapp.coretransactional.models.finance.Wallet;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
-import java.util.List;
 import java.util.UUID;
 
 public interface WalletService {
@@ -19,8 +19,8 @@ public interface WalletService {
 
     WalletBalanceResponse debitWallet(UUID driverId, DebitWalletRequest request);
 
-    List<WalletMovementResponse> getMovementHistory(UUID driverId);
+    Page<WalletMovementResponse> getMovementHistory(UUID driverId, Pageable pageable);
 
-    List<Wallet> getWalletsByTenantId(UUID tenantId);
+    Page<Wallet> getWalletsByTenantId(UUID tenantId, Pageable pageable);
 
 }

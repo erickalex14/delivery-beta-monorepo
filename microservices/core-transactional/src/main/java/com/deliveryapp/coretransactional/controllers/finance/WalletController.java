@@ -9,14 +9,16 @@ import com.deliveryapp.coretransactional.models.finance.Wallet;
 import com.deliveryapp.coretransactional.services.WalletService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
 import java.util.UUID;
 
 @RestController // Le dice a Spring que este mesero responde con JSON, no con páginas web HTML
-@RequestMapping("/api/v1/wallets") // La ruta base, sie;o ideal para el Gateway
+@RequestMapping("/api/v1/wallets") // La ruta base, ideal para el Gateway
 @RequiredArgsConstructor
 public class WalletController {
 
@@ -24,7 +26,7 @@ public class WalletController {
     private final WalletService walletService;
 
     // Abrimos el puerto POST para recibir recargas
-    //Hacer una recarga
+    // Hacer una recarga
     @PostMapping("/{driverId}/top-up")
     public ResponseEntity<WalletBalanceResponse> topUpWallet(
             // @Valid despierta a nuestro "Cadenero" (las reglas @NotNull y @Min del DTO)
@@ -38,7 +40,7 @@ public class WalletController {
 
     // Endpoint para crear una billetera
     @PostMapping
-    public  ResponseEntity<WalletBalanceResponse> createWallet(
+    public ResponseEntity<WalletBalanceResponse> createWallet(
             @Valid @RequestBody CreateWalletRequest request) {
         WalletBalanceResponse response = walletService.createWallet(request);
         return ResponseEntity.status(201).body(response); // 201 Created
@@ -53,19 +55,27 @@ public class WalletController {
         return ResponseEntity.ok(response);
     }
 
-        // Endpoint para obtener el historial de movimientos de la billetera
-        @GetMapping("/{driverId}/history")
-        public ResponseEntity<List<WalletMovementResponse>> getHistory(
-                @PathVariable UUID driverId){
-            // El Service devuelve movimientos, así que el Controller debe esperar movimientos
-            List<WalletMovementResponse> history = walletService.getMovementHistory(driverId);
+    // Endpoint para obtener el historial de movimientos de la billetera (PAGINADO)
+    @GetMapping("/{driverId}/history")
+    public ResponseEntity<Page<WalletMovementResponse>> getHistory(
+            @PathVariable UUID driverId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
 
-            return ResponseEntity.ok(history);
-        }
+        Pageable pageable = PageRequest.of(page, size);
+        Page<WalletMovementResponse> history = walletService.getMovementHistory(driverId, pageable);
 
-        //Auditoría Estricta: Endpoint para obtener el historial de movimientos de la billetera por tenantId
-        @GetMapping("/tenant/{tenantId}")
-        public ResponseEntity<List<Wallet>> getWalletsByTenant(@PathVariable UUID tenantId) {
-            return ResponseEntity.ok(walletService.getWalletsByTenantId(tenantId));
-        }
+        return ResponseEntity.ok(history);
+    }
+
+    // Auditoría Estricta: Endpoint para obtener el historial de billeteras por tenantId (PAGINADO)
+    @GetMapping("/tenant/{tenantId}")
+    public ResponseEntity<Page<Wallet>> getWalletsByTenant(
+            @PathVariable UUID tenantId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+
+        Pageable pageable = PageRequest.of(page, size);
+        return ResponseEntity.ok(walletService.getWalletsByTenantId(tenantId, pageable));
+    }
 }

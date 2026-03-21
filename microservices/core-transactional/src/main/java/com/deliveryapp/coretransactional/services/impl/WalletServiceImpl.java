@@ -13,10 +13,12 @@ import com.deliveryapp.coretransactional.repositories.finance.LedgerPostingRepos
 import com.deliveryapp.coretransactional.repositories.finance.WalletRepository;
 import com.deliveryapp.coretransactional.services.WalletService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
-import java.util.List;
 import java.util.UUID;
 
 @Service // Le dice a Spring que este es el Chef Oficial
@@ -135,26 +137,26 @@ public class WalletServiceImpl implements WalletService {
     //Obtener el historial de movimientos de la billetera, mostrando la descripción, monto, dirección (crédito o débito) y fecha de cada movimiento. Se ordena por fecha descendente para mostrar primero los movimientos más recientes.
     @Override
     @Transactional(readOnly = true)
-    public List<WalletMovementResponse> getMovementHistory(UUID driverId) {
-        //Validar que la billetera exista
+    public Page<WalletMovementResponse> getMovementHistory(UUID driverId, Pageable pageable) {
+        // 1. Validar que la billetera exista
         Wallet wallet = walletRepository.findByUserId(driverId)
                 .orElseThrow(() -> new RuntimeException("¡Error! No se encontro la billetera"));
-        //Obtener los movimientos (LedgerPostings) relacionados con esta billetera
-        return ledgerPostingRepository.findByWalletUserIdOrderByCreatedAtDesc(driverId)
-                .stream()
+
+        // 2. Obtener los movimientos paginados y mapearlos directamente
+        // Nota que quitamos el .stream() y el .toList()
+        return ledgerPostingRepository.findByWalletUserIdOrderByCreatedAtDesc(driverId, pageable)
                 .map(posting -> WalletMovementResponse.builder()
                         .description(posting.getLedgerEntry().getDescription())
                         .amount(posting.getAmount())
                         .direction(posting.getDirection())
                         .date(posting.getCreatedAt())
-                        .build())
-                .toList();
+                        .build());
     }
 
     //  Auditoria Multi-tenant: Obtener todas las billeteras asociadas a un tenant específico (Ej: todas las billeteras de una ciudad o franquicia)
     @Override
-    public List<Wallet> getWalletsByTenantId(UUID tenantId) {
-        return walletRepository.findByTenantId(tenantId);
+    public Page<Wallet> getWalletsByTenantId(UUID tenantId, Pageable pageable) {
+        return walletRepository.findByTenantId(tenantId, pageable);
     }
 
 

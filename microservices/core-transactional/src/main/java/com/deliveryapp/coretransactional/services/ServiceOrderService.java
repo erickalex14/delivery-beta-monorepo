@@ -2,8 +2,9 @@ package com.deliveryapp.coretransactional.services;
 
 import com.deliveryapp.coretransactional.models.logistic.ServiceOrder;
 import com.deliveryapp.coretransactional.dtos.request.logistic.CreateOrderRequest;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
-import java.util.List;
 import java.util.UUID;
 
 public interface ServiceOrderService {
@@ -12,9 +13,9 @@ public interface ServiceOrderService {
     ServiceOrder getOrderById(UUID orderId);
 
     // Las búsquedas que faltaban
-    List<ServiceOrder> getOrdersByClientId(UUID clientId);
-    List<ServiceOrder> getOrdersByDriverId(UUID driverId);
-    List<ServiceOrder> getOrdersByMerchantId(UUID merchantId);
-    List<ServiceOrder> getOrdersByType(String type);
+    Page<ServiceOrder> getOrdersByClientId(UUID clientId, Pageable pageable);
+    Page<ServiceOrder> getOrdersByDriverId(UUID driverId, Pageable pageable);
+    Page<ServiceOrder> getOrdersByMerchantId(UUID merchantId, Pageable pageable);
+    Page<ServiceOrder> getOrdersByType(String type, Pageable pageable);
 
 }

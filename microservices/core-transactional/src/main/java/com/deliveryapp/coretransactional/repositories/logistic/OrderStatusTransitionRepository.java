@@ -1,10 +1,11 @@
 package com.deliveryapp.coretransactional.repositories.logistic;
 
 import com.deliveryapp.coretransactional.models.logistic.OrderStatusTransition;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
-import java.util.List;
 import java.util.UUID;
 import java.util.Optional;
 
@@ -18,5 +19,5 @@ public interface OrderStatusTransitionRepository extends  JpaRepository<OrderSta
     );
 
     // Método auxiliar: Devuelve todas las opciones a las que un rol puede avanzar desde el estado actual
-    List<OrderStatusTransition> findByFromStatusIdAndAllowedRole(UUID fromStatusId, String allowedRole);
+    Page<OrderStatusTransition> findByFromStatusIdAndAllowedRole(UUID fromStatusId, String allowedRole, Pageable pageable);
 }

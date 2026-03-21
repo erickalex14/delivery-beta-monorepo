@@ -4,10 +4,12 @@ import com.deliveryapp.coretransactional.models.finance.LedgerEntry;
 import com.deliveryapp.coretransactional.models.finance.LedgerPosting;
 import com.deliveryapp.coretransactional.services.LedgerService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -17,38 +19,61 @@ public class LedgerController {
 
     private final LedgerService ledgerService;
 
-    // --- ENDPOINTS DE ENTRADAS (ASIENTOS) ---
+    // ==========================================
+    // ENDPOINTS DE ENTRADAS (ASIENTOS CONTABLES)
+    // ==========================================
 
-    // Auditoría Cruzada: Buscar la entrada contable usando el ID del pedido/flete
+    // 1. Búsqueda exacta (No requiere paginación)
     @GetMapping("/entries/reference/{referenceId}")
     public ResponseEntity<LedgerEntry> getEntryByReference(@PathVariable UUID referenceId) {
         return ResponseEntity.ok(ledgerService.getEntryByReferenceId(referenceId));
     }
 
-    // Filtro de Auditoría: Buscar por tipo (Ej: Tráeme todas las recargas "TOP_UP" de hoy)
+    // 2. Búsqueda por tipo (Paginada)
     @GetMapping("/entries/type/{type}")
-    public ResponseEntity<List<LedgerEntry>> getEntriesByType(@PathVariable String type) {
-        return ResponseEntity.ok(ledgerService.getEntriesByType(type));
+    public ResponseEntity<Page<LedgerEntry>> getEntriesByType(
+            @PathVariable String type,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+
+        Pageable pageable = PageRequest.of(page, size);
+        return ResponseEntity.ok(ledgerService.getEntriesByType(type, pageable));
     }
 
+    // ==========================================
+    // ENDPOINTS DE MOVIMIENTOS (DÉBITOS/CRÉDITOS)
+    // ==========================================
 
-    // --- ENDPOINTS DE MOVIMIENTOS (DÉBITOS/CRÉDITOS) ---
-
-    // Busca todos los movimientos de una billetera en específico
+    // 3. Movimientos por ID de Billetera (Paginada)
     @GetMapping("/postings/wallet/{walletId}")
-    public ResponseEntity<List<LedgerPosting>> getPostingsByWallet(@PathVariable UUID walletId) {
-        return ResponseEntity.ok(ledgerService.getPostingsByWalletId(walletId));
+    public ResponseEntity<Page<LedgerPosting>> getPostingsByWallet(
+            @PathVariable UUID walletId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+
+        Pageable pageable = PageRequest.of(page, size);
+        return ResponseEntity.ok(ledgerService.getPostingsByWalletId(walletId, pageable));
     }
 
-    // "Busca por el userId de la Wallet asociada, ordena por fecha descendente"
+    // 4. Movimientos por ID de Usuario (Conductor/Comercio) (Paginada)
     @GetMapping("/postings/user/{userId}")
-    public ResponseEntity<List<LedgerPosting>> getPostingsByUser(@PathVariable UUID userId) {
-        return ResponseEntity.ok(ledgerService.getPostingsByUserId(userId));
+    public ResponseEntity<Page<LedgerPosting>> getPostingsByUser(
+            @PathVariable UUID userId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+
+        Pageable pageable = PageRequest.of(page, size);
+        return ResponseEntity.ok(ledgerService.getPostingsByUserId(userId, pageable));
     }
 
-    // Auditoría Estricta: Tráeme el débito y el crédito de un asiento contable específico
+    // 5. Movimientos que pertenecen a un Asiento Contable específico (Paginada)
     @GetMapping("/postings/entry/{entryId}")
-    public ResponseEntity<List<LedgerPosting>> getPostingsByEntry(@PathVariable UUID entryId) {
-        return ResponseEntity.ok(ledgerService.getPostingsByEntryId(entryId));
+    public ResponseEntity<Page<LedgerPosting>> getPostingsByEntry(
+            @PathVariable UUID entryId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+
+        Pageable pageable = PageRequest.of(page, size);
+        return ResponseEntity.ok(ledgerService.getPostingsByEntryId(entryId, pageable));
     }
 }

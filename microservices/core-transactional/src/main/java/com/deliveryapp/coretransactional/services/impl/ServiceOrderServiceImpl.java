@@ -13,6 +13,8 @@ import lombok.RequiredArgsConstructor;
 import org.locationtech.jts.geom.Coordinate;
 import org.locationtech.jts.geom.GeometryFactory;
 import org.locationtech.jts.geom.Point;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.transaction.annotation.Transactional;
@@ -82,24 +84,24 @@ public class ServiceOrderServiceImpl implements ServiceOrderService {
 
     //Obtener por id del cliente
     @Override
-    public java.util.List<ServiceOrder> getOrdersByClientId(UUID clientId) {
-        return orderRepository.findByClientId(clientId);}
+    public Page<ServiceOrder> getOrdersByClientId(UUID clientId, Pageable pageable) {
+        return orderRepository.findByClientId(clientId, pageable);}
 
     //Obtener por id del conductor
     @Override
-    public java.util.List<ServiceOrder> getOrdersByDriverId(UUID driverId) {
-        return orderRepository.findByDriverId(driverId);
+    public Page<ServiceOrder> getOrdersByDriverId(UUID driverId, Pageable pageable) {
+        return orderRepository.findByDriverId(driverId, pageable);
     }
 
     //Obtener por id del comercio
     @Override
-    public java.util.List<ServiceOrder> getOrdersByMerchantId(UUID merchantId) {
-        return orderRepository.findByMerchantId(merchantId);
+    public Page<ServiceOrder> getOrdersByMerchantId(UUID merchantId, Pageable pageable) {
+        return orderRepository.findByMerchantId(merchantId, pageable);
     }
 
     //Obtener por tipo de orden
     @Override
-    public java.util.List<ServiceOrder> getOrdersByType(String type) {
-        return orderRepository.findByType(type);}
+    public Page<ServiceOrder> getOrdersByType(String type, Pageable pageable) {
+        return orderRepository.findByType(type, pageable);}
 
 }

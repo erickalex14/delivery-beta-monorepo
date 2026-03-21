@@ -6,9 +6,10 @@ import com.deliveryapp.coretransactional.repositories.finance.LedgerEntryReposit
 import com.deliveryapp.coretransactional.repositories.finance.LedgerPostingRepository;
 import com.deliveryapp.coretransactional.services.LedgerService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
-import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -18,34 +19,34 @@ public class LedgerServiceImpl implements LedgerService {
     private final LedgerEntryRepository entryRepository;
     private final LedgerPostingRepository postingRepository;
 
-    // Auditoría Cruzada: Buscar la entrada contable usando el ID del pedido/flete
+    // 1. Auditoría Cruzada: Buscar la entrada contable usando el ID del pedido/flete
     @Override
     public LedgerEntry getEntryByReferenceId(UUID referenceId) {
         return entryRepository.findByReferenceId(referenceId)
                 .orElseThrow(() -> new RuntimeException("Asiento contable no encontrado para la referencia: " + referenceId));
     }
 
-    // Filtro de Auditoría: Buscar por tipo (Ej: Tráeme todas las recargas "TOP_UP" de hoy)
+    // 2. Filtro de Auditoría: Buscar por tipo (Ej: Tráeme todas las recargas "TOP_UP" de hoy)
     @Override
-    public List<LedgerEntry> getEntriesByType(String type) {
-        return entryRepository.findByReferenceTypeOrderByCreatedAtDesc(type);
+    public Page<LedgerEntry> getEntriesByType(String type, Pageable pageable) {
+        return entryRepository.findByReferenceTypeOrderByCreatedAtDesc(type, pageable);
     }
 
-    // Busca todos los movimientos de una billetera en específico
+    // 3. Busca todos los movimientos de una billetera en específico
     @Override
-    public List<LedgerPosting> getPostingsByWalletId(UUID walletId) {
-        return postingRepository.findByWalletIdOrderByCreatedAtDesc(walletId);
+    public Page<LedgerPosting> getPostingsByWalletId(UUID walletId, Pageable pageable) {
+        return postingRepository.findByWalletIdOrderByCreatedAtDesc(walletId, pageable);
     }
 
-    // "Busca por el userId de la Wallet asociada, ordena por fecha descendente"
+    // 4. Busca por el userId de la Wallet asociada
     @Override
-    public List<LedgerPosting> getPostingsByUserId(UUID userId) {
-        return postingRepository.findByWalletUserIdOrderByCreatedAtDesc(userId);
+    public Page<LedgerPosting> getPostingsByUserId(UUID userId, Pageable pageable) {
+        return postingRepository.findByWalletUserIdOrderByCreatedAtDesc(userId, pageable);
     }
 
-    // Auditoría Estricta: Tráeme el débito y el crédito de un asiento contable específico
+    // 5. Auditoría Estricta: Tráeme el débito y el crédito de un asiento contable específico
     @Override
-    public List<LedgerPosting> getPostingsByEntryId(UUID ledgerEntryId) {
-        return postingRepository.findByLedgerEntryId(ledgerEntryId);
+    public Page<LedgerPosting> getPostingsByEntryId(UUID ledgerEntryId, Pageable pageable) {
+        return postingRepository.findByLedgerEntryId(ledgerEntryId, pageable);
     }
 }
