@@ -18,7 +18,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.UUID;
 
 @RestController // Le dice a Spring que este mesero responde con JSON, no con páginas web HTML
-@RequestMapping("/api/v1/wallets") // La ruta base, ideal para el Gateway
+@RequestMapping("/api/v1/finance/wallets") // La ruta base, ideal para el Gateway
 @RequiredArgsConstructor
 public class WalletController {
 
