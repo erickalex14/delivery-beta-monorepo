@@ -5,6 +5,7 @@
     <option name="originalFiles">
       <list>
         <option value="$PROJECT_DIR$/microservices/core-transactional/pom.xml" />
+        <option value="$PROJECT_DIR$/microservices/identity-service/pom.xml" />
       </list>
     </option>
   </component>

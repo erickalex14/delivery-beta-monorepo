@@ -1,0 +1,30 @@
+server:
+  port: 8083 # El Gateway es 3000, el Core es 8080, este será el 8083
+
+spring:
+  application:
+    name: identity-service
+
+  datasource:
+    url: jdbc:postgresql://localhost:5433/delivery_superapp
+    username: superapp_user
+    password: Miloj2210_
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: update # Crea y actualiza las tablas automáticamente
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+# Variables personalizadas para la firma de los Tokens
+jwt:
+  # ¡Debe ser exactamente la misma que pusimos en el Gateway!
+  secret: FIRMA_SECRETA_NEBULA_2026
+  # Tiempo de vida del Access Token (15 minutos en milisegundos)
+  access-token-expiration: 900000
+  # Tiempo de vida del Refresh Token (7 días en milisegundos)
+  refresh-token-expiration: 604800000
