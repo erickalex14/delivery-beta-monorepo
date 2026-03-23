@@ -17,6 +17,10 @@ public class OrderStatusTransition {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "from_status_id", nullable = false)
+    private OrderStatus fromStatus;
+
     // Relación con el estado de destino
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "to_status_id", nullable = false)

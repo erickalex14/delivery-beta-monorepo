@@ -129,7 +129,7 @@ public class ServiceOrderServiceImpl implements ServiceOrderService {
 
         //Consultar si el salto es legal para el rol
         OrderStatusTransition transition = transitionRepository
-                .findByFromStatusIdAndToStatusIdAllowedRole(currentStatus.getId(), targetStatus.getId(), request.getUserRole())
+                .findByFromStatusIdAndToStatusIdAndAllowedRole(currentStatus.getId(), targetStatus.getId(), request.getUserRole())
                 .orElseThrow(() -> new RuntimeException(
                         "Cambio de estado NO permitido de " + currentStatus.getCode() +
                         " a " + targetStatus.getCode() + " para el rol " + request.getUserRole()));

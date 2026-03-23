@@ -12,14 +12,9 @@ import java.util.UUID;
 import java.util.Optional;
 
 @Repository
-public interface OrderStatusTransitionRepository extends  JpaRepository<OrderStatusTransition, UUID> {
-    // Método clave: Verifica si existe una regla que permita el cambio de estado por un rol específico
-    Optional<OrderStatusTransition> findByFromStatusIdAndToStatusIdAllowedRole(
-            UUID fromStatusId,
-            UUID toStatusId,
-            String allowedRole
-    );
+public interface OrderStatusTransitionRepository extends JpaRepository<OrderStatusTransition, UUID> {
 
+    // Método clave blindado con @Query
     @Query("SELECT t FROM OrderStatusTransition t WHERE t.fromStatus.id = :fromStatusId AND t.toStatus.id = :toStatusId AND t.allowedRole = :role")
     Optional<OrderStatusTransition> findByFromStatusIdAndToStatusIdAndAllowedRole(
             @Param("fromStatusId") UUID fromStatusId,
@@ -27,6 +22,6 @@ public interface OrderStatusTransitionRepository extends  JpaRepository<OrderSta
             @Param("role") String allowedRole
     );
 
-    // Método auxiliar: Devuelve todas las opciones a las que un rol puede avanzar desde el estado actual
+    // Método auxiliar: Devuelve todas las opciones a las que un rol puede avanzar (¡Spring ya sabe qué es fromStatusId porque lo agregamos al modelo!)
     Page<OrderStatusTransition> findByFromStatusIdAndAllowedRole(UUID fromStatusId, String allowedRole, Pageable pageable);
 }
