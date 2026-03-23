@@ -8,4 +8,5 @@ import java.util.UUID;
 
 public interface OrderSecurityRepository extends  JpaRepository<OrderSecurity, UUID> {
     Optional<OrderSecurity> findByOrder(ServiceOrder order);
+    Optional<OrderSecurity> findByOrderId(UUID orderId);
 }

@@ -1,6 +1,7 @@
 package com.deliveryapp.coretransactional.controllers.logistic;
 
 import com.deliveryapp.coretransactional.dtos.request.logistic.CreateOrderRequest;
+import com.deliveryapp.coretransactional.dtos.request.logistic.UpdateOrderStatusRequest;
 import com.deliveryapp.coretransactional.dtos.response.logistic.ServiceOrderResponse;
 import com.deliveryapp.coretransactional.models.logistic.ServiceOrder;
 import com.deliveryapp.coretransactional.services.ServiceOrderService;
@@ -92,6 +93,17 @@ public class ServiceOrderController {
 
         return ResponseEntity.ok(responses);
     }
+
+    //Actualizacion de estados (Endpoint Maquina de estados)
+    @PutMapping("/{id}/status")
+    public ResponseEntity<ServiceOrderResponse> updateOrderStatus(
+            @PathVariable UUID id,
+            @Valid @RequestBody UpdateOrderStatusRequest request){
+        ServiceOrder updatedOrder = serviceOrderService.updateOrderStatus(id, request);
+        return ResponseEntity.ok(mapToResponse(updatedOrder));
+    }
+
+
 
     // Metodo Helper
     private ServiceOrderResponse mapToResponse(ServiceOrder order) {
