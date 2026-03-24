@@ -11,6 +11,12 @@ spring:
     password: Miloj2210_
     driver-class-name: org.postgresql.Driver
 
+  rabbitmq:
+    host: localhost
+    port: 5672
+    username: admin
+    password: admin123
+
   jpa:
     database-platform: org.hibernate.dialect.PostgreSQLDialect
     hibernate:
@@ -20,3 +26,4 @@ spring:
       hibernate:
         format_sql: true
         hbm2ddl.create_namespaces: true
+

@@ -11,6 +11,12 @@ spring:
     password: Miloj2210_
     driver-class-name: org.postgresql.Driver
 
+  rabbitmq:
+    host: localhost
+    port: 5672
+    username: admin
+    password: admin123
+
   jpa:
     hibernate:
       ddl-auto: update # Crea y actualiza las tablas automáticamente
