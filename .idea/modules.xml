@@ -2,7 +2,6 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/microservices/core-transactional/core-transactional.iml" filepath="$PROJECT_DIR$/microservices/core-transactional/core-transactional.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/delivery-flete-beta.iml" filepath="$PROJECT_DIR$/.idea/delivery-flete-beta.iml" />
     </modules>
   </component>
