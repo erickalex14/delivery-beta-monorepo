@@ -4,14 +4,15 @@ import helmet from 'helmet';
 import { ValidationPipe } from '@nestjs/common';
 import * as express from 'express';
 import { setupProxies } from './middlewares/proxy.setup'; // Importamos la función de configuración de proxies
+import { globalLogger } from './middlewares/logger.middleware';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-
   // CAPAS DE SEGURIDAD (Reglas 3, 4, 12 y 13)
 
   app.use(helmet());
+  app.use(globalLogger);
 
   app.use(express.json({ limit: '500kb' }));
   app.use(express.urlencoded({ extended: true, limit: '500kb' }));

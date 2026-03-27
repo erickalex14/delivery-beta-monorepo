@@ -9,7 +9,9 @@ export function setupProxies(app: INestApplication) {
   const IDENTITY_SERVICE_URL =
     process.env.IDENTITY_SERVICE_URL || 'http://localhost:8083';
 
+  // ==========================================
   // RUTAS PÚBLICAS (No requieren Token)
+  // ==========================================
 
   // 0. Redirigir Autenticación (Identity Service)
   app.use(
@@ -17,10 +19,14 @@ export function setupProxies(app: INestApplication) {
     createProxyMiddleware({
       target: IDENTITY_SERVICE_URL,
       changeOrigin: true,
+      proxyTimeout: 5000, // ⏳ 5 segundos de timeout
+      timeout: 5000,
     }),
   );
 
+  // ==========================================
   // RUTAS PROTEGIDAS (Requieren Token JWT)
+  // ==========================================
 
   // A. Redirigir la logística (Core Transactional)
   app.use('/api/v1/logistic/service-orders', validateJwtToken);
@@ -29,6 +35,8 @@ export function setupProxies(app: INestApplication) {
     createProxyMiddleware({
       target: CORE_TRANSACTIONAL_URL,
       changeOrigin: true,
+      proxyTimeout: 5000,
+      timeout: 5000,
     }),
   );
 
@@ -39,6 +47,8 @@ export function setupProxies(app: INestApplication) {
     createProxyMiddleware({
       target: CORE_TRANSACTIONAL_URL,
       changeOrigin: true,
+      proxyTimeout: 5000,
+      timeout: 5000,
     }),
   );
 
@@ -49,10 +59,12 @@ export function setupProxies(app: INestApplication) {
     createProxyMiddleware({
       target: CORE_TRANSACTIONAL_URL,
       changeOrigin: true,
+      proxyTimeout: 5000,
+      timeout: 5000,
     }),
   );
 
   console.log(
-    'Proxies configurados: Autenticación pública y rutas protegidas con JWT.',
+    'Proxies configurados: Autenticación pública y rutas protegidas con JWT y Timeouts.',
   );
 }
