@@ -6,37 +6,38 @@ export function validateJwtToken(
   res: Response,
   next: NextFunction,
 ) {
-  //Buscamos el token en el header de la petición
-  const authHeader = req.headers.authorization;
+  // 1. Extraemos el token de la cabecera 'Authorization: Bearer <token>'
+  const authHeader = req.headers['authorization'];
+
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return res.status(401).json({
-      error: 'No autorizado',
-      message: 'Token no proporcionado o formato incorrecto',
+      status: 401,
+      error: 'Unauthorized',
+      message: 'Token de acceso faltante o formato inválido.',
     });
   }
 
-  //Extraemos el token del header
   const token = authHeader.split(' ')[1];
 
   try {
-    const JWT_SECRET = process.env.JWT_SECRET || 'super_secret_default';
-    //Verificamos el token
-    const decoded = jwt.verify(token, JWT_SECRET);
-    //Si todo va bien se inyectya la info del usuarioa la peticion
-    //para que los microservicios sepan quien hace la llamada
-    req['user'] = decoded;
-    //Damos paso libre
+    // 2. Verificamos la firma matemática del token (Asegúrate de que coincida con el de Java)
+    const secret = process.env.JWT_SECRET || 'FIRMA_SECRETA_NEBULA_2026';
+    const decoded = jwt.verify(token, secret) as any;
+
+    // 3. 🛡️ INYECCIÓN DE HEADERS (MAGIA NIVEL GOD)
+    // El API Gateway muta la petición y le incrusta los datos del usuario.
+    // Así, el Core Transactional en Java solo tiene que leer estos headers.
+    req.headers['X-User-Id'] = decoded.userId || decoded.sub; // Depende de cómo lo llames en Java
+    req.headers['X-User-Role'] = decoded.role;
+
+    // 4. Dejamos que la petición continúe hacia el Proxy (hacia el microservicio de destino)
     next();
   } catch (error) {
-    if (error instanceof Error && error.name === 'TokenExpiredError') {
-      return res.status(401).json({
-        error: 'Token Expirado',
-        message: 'Usa tu refresh_token para obtener uno nuevo',
-      });
-    }
+    // Si el token expiró o fue alterado, el Gateway lo bloquea como un muro de contención
     return res.status(401).json({
-      error: 'No Autorizado',
-      message: 'El token es inválido o ha sido modificado',
+      status: 401,
+      error: 'Unauthorized',
+      message: 'El token ha expirado o es inválido.',
     });
   }
 }
