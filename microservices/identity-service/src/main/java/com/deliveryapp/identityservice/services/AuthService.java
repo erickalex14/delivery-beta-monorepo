@@ -11,5 +11,7 @@ public interface AuthService {
 
     AuthResponse refreshToken (String refreshToken);
 
+    AuthResponse googleAuth (com.deliveryapp.identityservice.dtos.request.GoogleAuthRequest googleAuthRequest);
+
     void logout(String accessToken);
 }

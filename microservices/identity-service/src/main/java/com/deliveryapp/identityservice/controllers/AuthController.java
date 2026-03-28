@@ -1,5 +1,6 @@
 package com.deliveryapp.identityservice.controllers;
 
+import com.deliveryapp.identityservice.dtos.request.GoogleAuthRequest;
 import com.deliveryapp.identityservice.dtos.request.LoginRequest;
 import com.deliveryapp.identityservice.dtos.request.RegisterRequest;
 import com.deliveryapp.identityservice.dtos.response.AuthResponse; // 👈 Asegúrate de importar esto
@@ -33,5 +34,10 @@ public class AuthController {
         String jwt = token.substring(7);
         authService.logout(jwt);
         return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/google")
+    public ResponseEntity<AuthResponse> googleAuth(@Valid @RequestBody GoogleAuthRequest request) {
+        return ResponseEntity.ok(authService.googleAuth(request));
     }
 }
