@@ -6,6 +6,7 @@ import * as express from 'express';
 import { setupProxies } from './middlewares/proxy.setup';
 import { globalLogger } from './middlewares/logger.middleware';
 import { tenantMiddleware } from './middlewares/tenant.middleware';
+import { stripInternalHeaders } from './middlewares/strip-headers.middleware';
 
 // Importamos el sanitizador (usamos require para evitar problemas de tipado en TS)
 const xssClean = require('xss-clean');
@@ -28,6 +29,8 @@ async function bootstrap() {
 
   // 11. Sanitización Anti-XSS (Limpia scripts maliciosos de los inputs)
   app.use(xssClean());
+
+  app.use(stripInternalHeaders);
 
   // 13. Límite de Payload (Anti-Spam de archivos gigantes)
   app.use(express.json({ limit: '500kb' }));
