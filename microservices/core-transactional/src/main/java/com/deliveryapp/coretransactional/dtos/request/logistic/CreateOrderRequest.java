@@ -37,7 +37,9 @@ public class CreateOrderRequest {
     @DecimalMin(value = "0.01", message = "El monto debe ser mayor a 0")
     private BigDecimal totalAmount;
 
-    @NotBlank(message = "La moneda es obligatoria")
-    @Size(min = 3, max = 3, message = "Usa el código ISO (ej: USD)")
-    private String currency;
+    private String currency; // Opcional, el modelo lo setea a USD por defecto
+
+    //La llave para evitar fraude o doble-cobro por errores de red
+    @NotBlank(message = "La llave de idempotencia es obligatoria")
+    private String idempotencyKey;
 }

@@ -103,7 +103,15 @@ public class ServiceOrderController {
         return ResponseEntity.ok(mapToResponse(updatedOrder));
     }
 
+    //Aceptar pedido por parte del conductor (Endpoint específico para aceptar ordenes)
+    @PutMapping("/{id}/accept")
+    public ResponseEntity<ServiceOrderResponse> acceptOrder(
+            @PathVariable UUID id,
+            @RequestParam UUID driverId) { // Recibimos el ID del conductor por Query Param o Body
 
+        ServiceOrder acceptedOrder = serviceOrderService.acceptOrder(id, driverId);
+        return ResponseEntity.ok(mapToResponse(acceptedOrder));
+    }
 
     // Metodo Helper
     private ServiceOrderResponse mapToResponse(ServiceOrder order) {

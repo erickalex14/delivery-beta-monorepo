@@ -22,40 +22,38 @@ import java.math.BigDecimal;
 import java.util.Optional;
 import java.util.UUID;
 
-@Service // Le dice a Spring que este es el Chef Oficial
-@RequiredArgsConstructor // Lombok inyecta el Repository automáticamente sin usar 'Autowired'
+@Service
+@RequiredArgsConstructor
 public class WalletServiceImpl implements WalletService {
 
-    // Traemos al Bodeguero (Repository) para buscar datos
     private final WalletRepository walletRepository;
-    private final LedgerEntryRepository ledgerEntryRepository; // Para registrar cada movimiento en el libro contable
-    private final LedgerPostingRepository ledgerPostingRepository; // Para registrar cada asiento contable
+    private final LedgerEntryRepository ledgerEntryRepository;
+    private final LedgerPostingRepository ledgerPostingRepository;
 
-
-    // Recarga la billetera del conductor
+    //Recargar Billetera
     @Override
     @Transactional
     public WalletBalanceResponse topUpWallet(UUID driverId, TopUpWalletRequest request) {
-        Wallet wallet = walletRepository.findByUserId(driverId)
-                .orElseThrow(() -> new RuntimeException("¡Error! No se encontro la billetera"));
+        // RECARGA SEGURA EN BASE DE DATOS
+        int rowsUpdated = walletRepository.addBalanceSafely(driverId, request.getAmount());
+        if (rowsUpdated == 0) throw new RuntimeException("No se encontró la billetera para recargar");
 
-        // Crear el recibo (LedgerEntry)
+        // Buscamos la billetera YA actualizada
+        Wallet wallet = walletRepository.findByUserId(driverId).orElseThrow();
+
+        //Entrada al ledger entry
         LedgerEntry entry = new LedgerEntry();
         entry.setReferenceType("TOP_UP");
-        entry.setDescription("Recarga de saldo a la billetera");
+        entry.setDescription("Recarga de saldo a la billetera: " + request.getDescription());
         ledgerEntryRepository.save(entry);
 
-        // Crear el asiento contable (LedgerPosting)
+        //Asiento contable
         LedgerPosting posting = new LedgerPosting();
         posting.setLedgerEntry(entry);
         posting.setWallet(wallet);
         posting.setAmount(request.getAmount());
         posting.setDirection("CREDIT");
         ledgerPostingRepository.save(posting);
-
-        // Sumar el monto al balance
-        wallet.setBalance(wallet.getBalance().add(request.getAmount()));
-        walletRepository.save(wallet);
 
         return WalletBalanceResponse.builder()
                 .driverId(wallet.getUserId())
@@ -64,18 +62,14 @@ public class WalletServiceImpl implements WalletService {
                 .build();
     }
 
-
-    // 🛡️ CREACIÓN IDEMPOTENTE DE BILLETERA (Preparada para RabbitMQ)
+    //Crear billetera (Evento desencadenado al crear usuario en el Identity-service, osea
+    //Identityservice manda un mensaje con rabitMQ que se recibe aqui y dispara el metodo de crear billetera)
     @Override
     @Transactional
-    public WalletBalanceResponse createWallet(CreateWalletRequest request) {
-
+    public WalletBalanceResponse createWallet(CreateWalletRequest request){
+        // IDEMPOTENCIA PARA RABBITMQ
         Optional<Wallet> existingWallet = walletRepository.findByUserId(request.getDriverId());
-
-        // CONTROL DE IDEMPOTENCIA: Si RabbitMQ manda el evento dos veces, no explotamos.
-        // Simplemente interceptamos la falla y devolvemos la billetera que ya existe.
         if(existingWallet.isPresent()){
-            System.out.println("Idempotencia activada: La billetera para el usuario " + request.getDriverId() + " ya existe. Ignorando evento duplicado.");
             Wallet wallet = existingWallet.get();
             return WalletBalanceResponse.builder()
                     .driverId(wallet.getUserId())
@@ -84,12 +78,10 @@ public class WalletServiceImpl implements WalletService {
                     .build();
         }
 
-        // Crear una nueva billetera
         Wallet newWallet = new Wallet();
         newWallet.setUserId(request.getDriverId());
-        newWallet.setBalance(BigDecimal.ZERO); // ⚠️ CRÍTICO: Inicializar explícitamente en ZERO
-        newWallet.setCurrency("USD"); // ⚠️ CRÍTICO: Inicializar moneda explícitamente
-
+        newWallet.setBalance(BigDecimal.ZERO);
+        newWallet.setCurrency("USD");
         walletRepository.save(newWallet);
 
         return WalletBalanceResponse.builder()
@@ -99,21 +91,21 @@ public class WalletServiceImpl implements WalletService {
                 .build();
     }
 
-    // Debitar saldo de la billetera
+    //Debitos en las billeteras
     @Override
     @Transactional
     public WalletBalanceResponse debitWallet(UUID driverId, DebitWalletRequest request) {
-        Wallet wallet = walletRepository.findByUserId(driverId)
-                .orElseThrow(() -> new RuntimeException("¡Error! No se encontro la billetera"));
-
-        // Validar que haya suficiente saldo
-        if(wallet.getBalance().compareTo(request.getAmount()) < 0){
-            throw new RuntimeException("¡Error! Saldo insuficiente en la billetera");
+        // COBRO SEGURO EN BASE DE DATOS (Previene saldos negativos y Lost Updates)
+        int rowsUpdated = walletRepository.deductBalanceSafely(driverId, request.getAmount());
+        if(rowsUpdated == 0){
+            throw new RuntimeException("¡Error! Saldo insuficiente en la billetera o cuenta no encontrada");
         }
+
+        Wallet wallet = walletRepository.findByUserId(driverId).orElseThrow();
 
         LedgerEntry entry = new LedgerEntry();
         entry.setReferenceType("ORDER_COMISSION");
-        entry.setDescription("Comisión por servicio realizado");
+        entry.setDescription(request.getDescription());
         ledgerEntryRepository.save(entry);
 
         LedgerPosting posting = new LedgerPosting();
@@ -123,9 +115,6 @@ public class WalletServiceImpl implements WalletService {
         posting.setDirection("DEBIT");
         ledgerPostingRepository.save(posting);
 
-        wallet.setBalance(wallet.getBalance().subtract(request.getAmount()));
-        walletRepository.save(wallet);
-
         return WalletBalanceResponse.builder()
                 .driverId(wallet.getUserId())
                 .balance(wallet.getBalance())
@@ -133,7 +122,7 @@ public class WalletServiceImpl implements WalletService {
                 .build();
     }
 
-    // Historial de movimientos
+    //Ver movimientos de la billetera
     @Override
     @Transactional(readOnly = true)
     public Page<WalletMovementResponse> getMovementHistory(UUID driverId, Pageable pageable) {
@@ -149,7 +138,8 @@ public class WalletServiceImpl implements WalletService {
                         .build());
     }
 
-    // Auditoria Multi-tenant
+
+    //Multi tenant
     @Override
     public Page<Wallet> getWalletsByTenantId(UUID tenantId, Pageable pageable) {
         return walletRepository.findByTenantId(tenantId, pageable);
