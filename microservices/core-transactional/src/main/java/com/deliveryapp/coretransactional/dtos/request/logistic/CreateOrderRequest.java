@@ -33,9 +33,10 @@ public class CreateOrderRequest {
     @NotNull(message = "Coordenadas de destino obligatorias")
     private Double destinationLng;
 
-    @NotNull(message = "El monto es obligatorio")
-    @DecimalMin(value = "0.01", message = "El monto debe ser mayor a 0")
-    private BigDecimal totalAmount;
+    //Quitamos poder al front
+    //@NotNull(message = "El monto es obligatorio")
+    //@DecimalMin(value = "0.01", message = "El monto debe ser mayor a 0")
+    //private BigDecimal totalAmount;
 
     private String currency; // Opcional, el modelo lo setea a USD por defecto
 

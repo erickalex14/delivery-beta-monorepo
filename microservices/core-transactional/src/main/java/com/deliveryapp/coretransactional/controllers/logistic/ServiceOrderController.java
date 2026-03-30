@@ -1,7 +1,9 @@
 package com.deliveryapp.coretransactional.controllers.logistic;
 
 import com.deliveryapp.coretransactional.dtos.request.logistic.CreateOrderRequest;
+import com.deliveryapp.coretransactional.dtos.request.logistic.QuoteOrderRequest;
 import com.deliveryapp.coretransactional.dtos.request.logistic.UpdateOrderStatusRequest;
+import com.deliveryapp.coretransactional.dtos.response.logistic.QuoteOrderResponse;
 import com.deliveryapp.coretransactional.dtos.response.logistic.ServiceOrderResponse;
 import com.deliveryapp.coretransactional.models.logistic.ServiceOrder;
 import com.deliveryapp.coretransactional.services.ServiceOrderService;
@@ -111,6 +113,12 @@ public class ServiceOrderController {
 
         ServiceOrder acceptedOrder = serviceOrderService.acceptOrder(id, driverId);
         return ResponseEntity.ok(mapToResponse(acceptedOrder));
+    }
+
+    //Cotizador de precios al que llamara el front pa preguntar cuanto costaria un viaje o una entrega
+    @PostMapping("/quote")
+    public ResponseEntity<QuoteOrderResponse> quoteOrder(@Valid @RequestBody QuoteOrderRequest request) {
+        return ResponseEntity.ok(serviceOrderService.quoteOrder(request));
     }
 
     // Metodo Helper

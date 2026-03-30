@@ -2,7 +2,9 @@ package com.deliveryapp.coretransactional.services.impl;
 
 import com.deliveryapp.coretransactional.dtos.request.Wallets.DebitWalletRequest;
 import com.deliveryapp.coretransactional.dtos.request.logistic.CreateOrderRequest;
+import com.deliveryapp.coretransactional.dtos.request.logistic.QuoteOrderRequest;
 import com.deliveryapp.coretransactional.dtos.request.logistic.UpdateOrderStatusRequest;
+import com.deliveryapp.coretransactional.dtos.response.logistic.QuoteOrderResponse;
 import com.deliveryapp.coretransactional.models.logistic.*;
 import com.deliveryapp.coretransactional.repositories.logistic.*;
 import com.deliveryapp.coretransactional.services.ServiceOrderService;
@@ -18,6 +20,7 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.util.Optional;
@@ -36,7 +39,9 @@ public class ServiceOrderServiceImpl implements ServiceOrderService {
     private final OrderStatusHistoryRepository historyRepository;
     private final OrderStatusTransitionRepository transitionRepository;
 
-    // Crear orden (Con protección Idempotente)
+
+
+    // Crear orden (Con protección Idempotente), y calculador de precio
     @Override
     @Transactional
     public ServiceOrder createOrder(CreateOrderRequest request){
@@ -53,8 +58,10 @@ public class ServiceOrderServiceImpl implements ServiceOrderService {
         order.setType(request.getType());
         order.setClientId(request.getClientId());
         order.setMerchantId(request.getMerchantId());
-        order.setTotalAmount(request.getTotalAmount());
-        order.setCurrency(request.getCurrency() != null ? request.getCurrency() : "USD");
+        QuoteOrderResponse quote = calculatePrice(request.getType(), request.getDestinationLat(), request.getDestinationLng(),
+                request.getOriginLat(), request.getOriginLng());
+        order.setTotalAmount(quote.getEstimatedPrice());
+        order.setCurrency(quote.getCurrency());
         order.setIdempotencyKey(request.getIdempotencyKey());
 
         Point origin = geometryFactory.createPoint(new Coordinate(request.getOriginLng(), request.getOriginLat()));
@@ -79,7 +86,7 @@ public class ServiceOrderServiceImpl implements ServiceOrderService {
         return savedOrder;
     }
 
-    // CONDICIONES DE CARRERA (Optimistic Locking)
+    // Condiciones de carrera (Optimistic Locking)
     @Override
     @Transactional
     public ServiceOrder acceptOrder(UUID orderId, UUID driverId) {
@@ -125,7 +132,7 @@ public class ServiceOrderServiceImpl implements ServiceOrderService {
         return orderRepository.findByType(type, pageable);
     }
 
-    // Maquina de estados
+    // Máquina de estados
     @Override
     @Transactional
     public ServiceOrder updateOrderStatus(UUID orderId, UpdateOrderStatusRequest request){
@@ -193,5 +200,39 @@ public class ServiceOrderServiceImpl implements ServiceOrderService {
         }
 
         return updatedOrder;
+    }
+
+    //Helper cotizador, máquina de precios
+    private QuoteOrderResponse calculatePrice(String type, double lat1, double lon1, double lat2, double lon2) {
+        // 1. Fórmula de Haversine para obtener distancia en Kilómetros
+        final int R = 6371; // Radio de la tierra en KM
+        double latDistance = Math.toRadians(lat2 - lat1);
+        double lonDistance = Math.toRadians(lon2 - lon1);
+        double a = Math.sin(latDistance / 2) * Math.sin(latDistance / 2)
+                + Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2))
+                * Math.sin(lonDistance / 2) * Math.sin(lonDistance / 2);
+        double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        double distanceKm = R * c;
+
+        // 2. Lógica de Negocio (El Tarifario)
+        // Ejemplo: Base de arranque $1.25 para fletes y $1.50 para delivery. + $0.50 por Km recorrido.
+        BigDecimal baseFare = type.equals("RIDE") ? new BigDecimal("1.25") : new BigDecimal("1.50");
+        BigDecimal ratePerKm = new BigDecimal("0.50");
+
+        BigDecimal estimatedPrice = baseFare.add(ratePerKm.multiply(BigDecimal.valueOf(distanceKm)))
+                .setScale(2, RoundingMode.HALF_UP); // Redondeo bancario a 2 decimales
+
+        return QuoteOrderResponse.builder()
+                .estimatedPrice(estimatedPrice)
+                .distanceKm(Math.round(distanceKm * 100.0) / 100.0)
+                .currency("USD")
+                .type(type)
+                .build();
+    }
+
+    //Endpoint para que el Frontend pregunte el precio
+    public QuoteOrderResponse quoteOrder(QuoteOrderRequest request) {
+        return calculatePrice(request.getType(), request.getOriginLat(), request.getOriginLng(),
+                request.getDestinationLat(), request.getDestinationLng());
     }
 }
