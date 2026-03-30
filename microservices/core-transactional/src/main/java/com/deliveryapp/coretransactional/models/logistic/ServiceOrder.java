@@ -17,8 +17,7 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-// 🛠️ CORRECCIÓN 1: "logistics" con 's'
-@Table(schema = "logistics", name = "service_orders")
+@Table(schema = "logistic", name = "service_orders")
 @Data
 @SoftDelete(columnName = "deleted_at")
 public class ServiceOrder {

@@ -62,6 +62,54 @@ public class WalletServiceImpl implements WalletService {
                 .build();
     }
 
+    @Override
+    public void checkBalance(UUID userId, BigDecimal requiredAmount) {
+        Wallet wallet = walletRepository.findByUserId(userId)
+                .orElseThrow(() -> new RuntimeException("¡Error! No se encontro la billetera"));
+        if  (wallet.getBalance().compareTo(requiredAmount) < 0) {
+            throw new RuntimeException("¡Error! Saldo insuficiente para cubrir este servicio, recarga la billetera primero");
+        }
+    }
+
+    @Override
+    @Transactional
+    public void transferFunds(UUID fromUserId, UUID toUserId, BigDecimal amount, String description, String referenceType) {
+        // 1. Debitar del origen de forma segura (A nivel de Base de Datos)
+        int rowsDeducted = walletRepository.deductBalanceSafely(fromUserId, amount);
+        if (rowsDeducted == 0) {
+            throw new RuntimeException("El cliente no tiene saldo suficiente en este momento para pagar el viaje.");
+        }
+
+        // 2. Acreditar al destino
+        walletRepository.addBalanceSafely(toUserId, amount);
+
+        // 3. Buscar las billeteras actualizadas para el recibo
+        Wallet fromWallet = walletRepository.findByUserId(fromUserId).orElseThrow();
+        Wallet toWallet = walletRepository.findByUserId(toUserId).orElseThrow();
+
+        // 4. Crear el recibo maestro (LedgerEntry)
+        LedgerEntry entry = new LedgerEntry();
+        entry.setReferenceType(referenceType);
+        entry.setDescription(description);
+        ledgerEntryRepository.save(entry);
+
+        // 5. Asiento de Débito (Quitar plata al Cliente)
+        LedgerPosting debitPosting = new LedgerPosting();
+        debitPosting.setLedgerEntry(entry);
+        debitPosting.setWallet(fromWallet);
+        debitPosting.setAmount(amount);
+        debitPosting.setDirection("DEBIT");
+        ledgerPostingRepository.save(debitPosting);
+
+        // 6. Asiento de Crédito (Dar plata al Conductor)
+        LedgerPosting creditPosting = new LedgerPosting();
+        creditPosting.setLedgerEntry(entry);
+        creditPosting.setWallet(toWallet);
+        creditPosting.setAmount(amount);
+        creditPosting.setDirection("CREDIT");
+        ledgerPostingRepository.save(creditPosting);
+    }
+
     //Crear billetera (Evento desencadenado al crear usuario en el Identity-service, osea
     //Identityservice manda un mensaje con rabitMQ que se recibe aqui y dispara el metodo de crear billetera)
     @Override

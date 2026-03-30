@@ -5,6 +5,9 @@ import com.deliveryapp.coretransactional.dtos.request.logistic.CreateOrderReques
 import com.deliveryapp.coretransactional.dtos.request.logistic.QuoteOrderRequest;
 import com.deliveryapp.coretransactional.dtos.request.logistic.UpdateOrderStatusRequest;
 import com.deliveryapp.coretransactional.dtos.response.logistic.QuoteOrderResponse;
+import com.deliveryapp.coretransactional.events.logistic.DriverPenalizedEvent;
+import com.deliveryapp.coretransactional.events.logistic.OrderCreatedEvent;
+import com.deliveryapp.coretransactional.events.logistic.OrderStatusUpdateEvent;
 import com.deliveryapp.coretransactional.models.logistic.*;
 import com.deliveryapp.coretransactional.repositories.logistic.*;
 import com.deliveryapp.coretransactional.services.ServiceOrderService;
@@ -13,6 +16,7 @@ import lombok.RequiredArgsConstructor;
 import org.locationtech.jts.geom.Coordinate;
 import org.locationtech.jts.geom.GeometryFactory;
 import org.locationtech.jts.geom.Point;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -38,6 +42,7 @@ public class ServiceOrderServiceImpl implements ServiceOrderService {
     private final WalletService walletService;
     private final OrderStatusHistoryRepository historyRepository;
     private final OrderStatusTransitionRepository transitionRepository;
+    private final RabbitTemplate rabbitTemplate;
 
 
 
@@ -60,6 +65,7 @@ public class ServiceOrderServiceImpl implements ServiceOrderService {
         order.setMerchantId(request.getMerchantId());
         QuoteOrderResponse quote = calculatePrice(request.getType(), request.getDestinationLat(), request.getDestinationLng(),
                 request.getOriginLat(), request.getOriginLng());
+        walletService.checkBalance(request.getClientId(), quote.getEstimatedPrice());
         order.setTotalAmount(quote.getEstimatedPrice());
         order.setCurrency(quote.getCurrency());
         order.setIdempotencyKey(request.getIdempotencyKey());
@@ -82,6 +88,20 @@ public class ServiceOrderServiceImpl implements ServiceOrderService {
         security.setOrder(savedOrder);
         security.setPinHash(passwordEncoder.encode(rawPin));
         securityRepository.save(security);
+
+        OrderCreatedEvent event = OrderCreatedEvent.builder()
+                .orderId(savedOrder.getId())
+                .clientId(savedOrder.getClientId())
+                .type(savedOrder.getType())
+                .originLat(request.getOriginLat())
+                .originLng(request.getOriginLng())
+                .destinationLat(request.getDestinationLat())
+                .destinationLng(request.getDestinationLng())
+                .estimatedPrice(savedOrder.getTotalAmount())
+                .build();
+
+        rabbitTemplate.convertAndSend("logistic.exchange", "order.created", event);
+        System.out.println("Evento order.created emitido a RabbitMQ para el pedido: " + savedOrder.getId());
 
         return savedOrder;
     }
@@ -140,64 +160,95 @@ public class ServiceOrderServiceImpl implements ServiceOrderService {
                 .orElseThrow(() -> new RuntimeException("Orden no encontrada"));
         OrderStatus currentStatus = order.getStatus();
 
-        // Buscar por el ID del targetStatus, no por el orderId
         OrderStatus targetStatus = statusRepository.findById(request.getTargetStatusId())
                 .orElseThrow(() -> new RuntimeException("Estado objetivo no encontrado"));
 
-        // Idempotencia de estado
-        if (currentStatus.getId().equals(targetStatus.getId())) {
-            return order;
-        }
+        if (currentStatus.getId().equals(targetStatus.getId())) return order;
 
-        // Consultar si el salto es legal para el rol (State Machine Validation)
         OrderStatusTransition transition = transitionRepository
                 .findByFromStatusIdAndToStatusIdAndAllowedRole(currentStatus.getId(), targetStatus.getId(), request.getUserRole())
-                .orElseThrow(() -> new RuntimeException(
-                        "Cambio de estado NO permitido de " + currentStatus.getCode() +
-                                " a " + targetStatus.getCode() + " para el rol " + request.getUserRole()));
+                .orElseThrow(() -> new RuntimeException("Cambio de estado NO permitido"));
 
-        // Validar PIN de seguridad si la transición lo exige
         if(transition.isRequiresPin()){
             if (request.getSecurityPin() == null || request.getSecurityPin().isBlank()) {
-                throw new RuntimeException("Este cambio de estado requiere el PIN de seguridad del cliente");
+                throw new RuntimeException("Este cambio de estado requiere un PIN de seguridad");
             }
-
             OrderSecurity security = securityRepository.findByOrderId(orderId)
                     .orElseThrow(() -> new RuntimeException("Información de seguridad no encontrada"));
-
             if (!passwordEncoder.matches(request.getSecurityPin(), security.getPinHash())) {
                 throw new RuntimeException("PIN de seguridad incorrecto");
             }
         }
 
         order.setStatus(targetStatus);
-
-        // Estampar hora de finalización
-        if (targetStatus.isFinal()){
+        if (targetStatus.isFinal()) {
             order.setCompletedAt(LocalDateTime.now());
         }
 
         ServiceOrder updatedOrder = orderRepository.save(order);
 
-        // Auditoría inmutable de estados
         OrderStatusHistory history = new OrderStatusHistory();
         history.setOrder(updatedOrder);
         history.setStatus(targetStatus);
         history.setChangedBy(request.getChangedByUserId());
         historyRepository.save(history);
 
-        // COBRO AISLADO AL FINALIZAR
-        if (targetStatus.isFinal() && order.getDriverId() != null) {
-            BigDecimal saasFee = new BigDecimal("0.25");
+        // FLUJO DE DINERO Y PENALIDADES (REGLAS DE NEGOCIO)
 
+        // A. VIAJE FINALIZADO CON ÉXITO
+        if (targetStatus.getCode().equals("DELIVERED") && order.getDriverId() != null) {
+            // 1. Pago al conductor
+            walletService.transferFunds(
+                    order.getClientId(), order.getDriverId(), order.getTotalAmount(),
+                    "Pago finalizado por el pedido/flete: " + order.getId(), "ORDER_PAYMENT"
+            );
+            // 2. Cobro de comisión SaaS
+            BigDecimal saasFee = new BigDecimal("0.25");
             DebitWalletRequest debitReq = new DebitWalletRequest();
             debitReq.setAmount(saasFee);
             debitReq.setDescription("Comisión logística SaaS por pedido/flete: " + order.getId());
-
-            // Este debitWallet ya está blindado gracias al arreglo previo
             walletService.debitWallet(order.getDriverId(), debitReq);
-            System.out.println("Comision SaaS cobrada por pedido/flete: " + saasFee);
         }
+
+        // VIAJE CANCELADO (PENALIDADES)
+        else if (targetStatus.getCode().equals("CANCELLED")) {
+
+            // 1. Si cancela el CLIENTE y el conductor ya iba en camino
+            if (request.getUserRole().equals("CLIENT") && order.getDriverId() != null) {
+                // Multa del 50%
+                BigDecimal penaltyAmount = order.getTotalAmount().multiply(new BigDecimal("0.50"));
+                walletService.transferFunds(
+                        order.getClientId(), order.getDriverId(), penaltyAmount,
+                        "Compensación por cancelación de pedido: " + order.getId(), "CANCELLATION_FEE"
+                );
+                System.out.println("Multa del 50% aplicada al cliente: $" + penaltyAmount);
+            }
+
+            // 2. Si cancela el CONDUCTOR dejando tirado el viaje
+            else if (request.getUserRole().equals("DRIVER") && order.getDriverId() != null) {
+                // Disparamos evento para que el sistema lo bloquee 1 hora
+                DriverPenalizedEvent penaltyEvent = DriverPenalizedEvent.builder()
+                        .driverId(order.getDriverId())
+                        .orderId(order.getId())
+                        .penaltyMinutes(60)
+                        .reason("Cancelación de viaje en curso")
+                        .build();
+                rabbitTemplate.convertAndSend("logistic.exchange", "driver.penalized", penaltyEvent);
+                System.out.println("Evento de penalidad (60 min) emitido para el conductor: " + order.getDriverId());
+            }
+        }
+
+
+        // DISPARO A RABBITMQ DE CAMBIO DE ESTADO
+
+        OrderStatusUpdateEvent statusEvent = OrderStatusUpdateEvent.builder()
+                .orderId(updatedOrder.getId())
+                .clientId(updatedOrder.getClientId())
+                .driverId(updatedOrder.getDriverId())
+                .newStatus(targetStatus.getCode())
+                .build();
+
+        rabbitTemplate.convertAndSend("logistic.exchange", "order.status.updated", statusEvent);
 
         return updatedOrder;
     }

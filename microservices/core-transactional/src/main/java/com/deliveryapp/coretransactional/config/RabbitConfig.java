@@ -17,6 +17,13 @@ public class RabbitConfig {
     public static final String EXCHANGE_NAME = "user.exchange";
     public static final String ROUTING_KEY = "user.created";
 
+    public static final String LOGISTIC_EXCHANGE = "logistic.exchange";
+
+    @Bean
+    public TopicExchange logisticExchange() {
+        return new TopicExchange(LOGISTIC_EXCHANGE);
+    }
+
     @Bean
     public Queue walletQueue() {
         return new Queue(QUEUE_NAME, true);

@@ -9,10 +9,16 @@ import com.deliveryapp.coretransactional.models.finance.Wallet;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
+import java.math.BigDecimal;
 import java.util.UUID;
 
 public interface WalletService {
     // Le pasamos el ID explícitamente
+
+    void checkBalance(UUID userId, BigDecimal requiredAmount);
+
+    void transferFunds(UUID fromUserId, UUID toUserId, BigDecimal amount, String description, String referenceType);
+
     WalletBalanceResponse topUpWallet(UUID driverId, TopUpWalletRequest request);
 
     WalletBalanceResponse createWallet(CreateWalletRequest request);
