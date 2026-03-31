@@ -9,6 +9,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.UUID;
+
 @Data
 @Builder
 @AllArgsConstructor
@@ -43,5 +45,5 @@ public class RegisterRequest {
     private String role;
 
     // ID para segmentación por ciudades o países
-    private String tenantId;
+    private UUID tenantId;
 }

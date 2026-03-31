@@ -34,8 +34,8 @@ public class AuthServiceImpl implements AuthService {
     @Override
     @Transactional // Asegura que si falla el envío del evento, no se guarde el usuario (Consistencia)
     public AuthResponse register(RegisterRequest request) {
-        // 1. Validar existencia previa (Híbrido: Teléfono o Email)
-        if (userRepository.existsByPhone(request.getPhone())) {
+        // 1. Validar existencia previa
+        if (request.getPhone() != null && userRepository.existsByPhone(request.getPhone())) {
             throw new RuntimeException("El número de teléfono ya está registrado");
         }
 
@@ -43,21 +43,20 @@ public class AuthServiceImpl implements AuthService {
             throw new RuntimeException("El correo electrónico ya está registrado");
         }
 
-        // 2. Mapear y Encriptar contraseña con BCrypt
+        // 2. Mapear y Encriptar contraseña con BCrypt (Ajustado a los nuevos campos)
         User user = User.builder()
                 .fullName(request.getFullName())
                 .phone(request.getPhone())
                 .email(request.getEmail())
-                .password(request.getPassword() != null ?
-                        passwordEncoder.encode(request.getPassword()) : null) // BCrypt para nativos
+                .password(request.getPassword() != null ? passwordEncoder.encode(request.getPassword()) : null)
                 .role(request.getRole())
-                .googleId(request.getGoogleId())
-                .tenantId(request.getTenantId() != null ? UUID.fromString(request.getTenantId()) : null)
+                .authProvider("LOCAL") // Etiquetamos como usuario nativo
+                .tenantId(request.getTenantId()) // Ya es un UUID desde el DTO
                 .build();
 
         User savedUser = userRepository.save(user);
 
-        // 3. Publicar Evento para creación automática de Wallet
+        // 3. Publicar Evento para creación automática de Wallet en el Core Transaccional
         UserCreatedEvent event = new UserCreatedEvent(
                 savedUser.getId(),
                 savedUser.getPhone(),
@@ -72,36 +71,30 @@ public class AuthServiceImpl implements AuthService {
             throw new RuntimeException("Error al sincronizar con el módulo financiero");
         }
 
-        // 4. Generar Tokens (Access de 15min / Refresh de 7 días)
+        // 4. Generar Tokens
         return generateAuthResponse(savedUser);
     }
 
-    // Login
+    // Login (Exclusivo para credenciales manuales ahora)
     @Override
     public AuthResponse login(LoginRequest request) {
-        User user;
+        // Buscamos por teléfono o por correo
+        User user = userRepository.findByPhone(request.getPhone())
+                .or(() -> userRepository.findByEmail(request.getEmail()))
+                .orElseThrow(() -> new RuntimeException("Credenciales inválidas"));
 
-        // Logica hibrida, google o tradicional
-        if (request.getGoogleId() != null) {
-            user = userRepository.findByGoogleId(request.getGoogleId())
-                    .orElseThrow(() -> new RuntimeException("Usuario de Google no encontrado"));
-        } else {
-            user = userRepository.findByPhone(request.getPhone())
-                    .or(() -> userRepository.findByEmail(request.getEmail()))
-                    .orElseThrow(() -> new RuntimeException("Credenciales inválidas"));
-
-            // Validar clave con BCrypt
-            if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
-                throw new RuntimeException("Credenciales inválidas");
-            }
+        // Validar clave con BCrypt
+        if (user.getPassword() == null || !passwordEncoder.matches(request.getPassword(), user.getPassword())) {
+            throw new RuntimeException("Credenciales inválidas");
         }
+
         return generateAuthResponse(user);
     }
 
     // Refresh Token
     @Override
     public AuthResponse refreshToken(String refreshToken) {
-        // Aquí iría la lógica para validar el Refresh Token y emitir un nuevo Access Token
+        // TODO: Validar la firma del Refresh Token y generar un nuevo Access Token
         return null;
     }
 
@@ -135,34 +128,36 @@ public class AuthServiceImpl implements AuthService {
             String name = (String) payload.get("name");
             String pictureUrl = (String) payload.get("picture");
 
-            // 4. Buscamos si el usuario ya existe en nuestra base de datos
+            // 4. Buscamos si el usuario ya existe por correo o por providerId
             User user = userRepository.findByEmail(email).orElse(null);
 
             if (user == null) {
-                // ES UN USUARIO NUEVO -> LO REGISTRAMOS
+                // ES UN USUARIO NUEVO -> LO REGISTRAMOS CON LA ESTRUCTURA CORRECTA
                 if (request.getPhone() == null || request.getRole() == null) {
                     throw new RuntimeException("Es un usuario nuevo. Se requiere el teléfono y el rol para completar el registro.");
                 }
 
                 user = User.builder()
                         .email(email)
-                        .googleId(googleId)
+                        .providerId(googleId) // Guardamos el ID de Google aquí
+                        .authProvider("GOOGLE") // Marcamos el origen
                         .fullName(name)
                         .profileImage(pictureUrl)
                         .phone(request.getPhone())
                         .role(request.getRole())
-                        .password(passwordEncoder.encode(UUID.randomUUID().toString())) // Clave aleatoria
+                        .password(passwordEncoder.encode(UUID.randomUUID().toString())) // Clave aleatoria por seguridad
                         .build();
 
                 user = userRepository.save(user);
 
-                // DISPARAMOS EL EVENTO CON TODOS SUS PARAMETROS
+                // DISPARAMOS EL EVENTO
                 rabbitTemplate.convertAndSend("user.exchange", "user.created",
                         new UserCreatedEvent(user.getId(), user.getPhone(), user.getEmail(), user.getRole()));
             } else {
-                // EL USUARIO YA EXISTE -> ACTUALIZAMOS SU GOOGLE ID POR SI ACASO
-                if (user.getGoogleId() == null) {
-                    user.setGoogleId(googleId);
+                // EL USUARIO EXISTE -> ACTUALIZAMOS SU PROVIDER ID SI LE FALTABA
+                if (user.getProviderId() == null) {
+                    user.setProviderId(googleId);
+                    user.setAuthProvider("GOOGLE");
                     userRepository.save(user);
                 }
             }
@@ -175,10 +170,11 @@ public class AuthServiceImpl implements AuthService {
         }
     }
 
-    // Helper para generar el AuthResponse con JWT
+    // Helper para generar el AuthResponse con JWT (Ajustado para recibir el Objeto User)
     private AuthResponse generateAuthResponse(User user) {
-        String accessToken = jwtService.generateAccessToken(user.getPhone(), user.getRole());
-        String refreshToken = jwtService.generateRefreshToken(user.getPhone());
+        // Ahora le pasamos el objeto entero como configuramos en el JwtService
+        String accessToken = jwtService.generateAccessToken(user);
+        String refreshToken = jwtService.generateRefreshToken(user);
 
         return AuthResponse.builder()
                 .accessToken(accessToken)

@@ -1,5 +1,6 @@
 package com.deliveryapp.identityservice.security;
 
+import com.deliveryapp.identityservice.models.User;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.io.Decoders;
@@ -23,16 +24,16 @@ public class JwtService {
     @Value("${jwt.refresh-token-expiration}")
     private long refreshTokenExpiration;
 
-    //Generar accers token (15 minutos) para el gateway
-    public String generateAccessToken(String phone, String role) {
+    public String generateAccessToken(User user) {
         Map<String, Object> claims = new HashMap<>();
-        claims.put("role", role);
-        return createToken(claims, phone, accessTokenExpiration);
+        claims.put("role", user.getRole());
+        claims.put("email", user.getEmail());
+
+        return createToken(claims, user.getId().toString(), accessTokenExpiration);
     }
 
-    //Generar refresh token (7 días) para renovar el access token
-    public String generateRefreshToken(String phone) {
-        return createToken(new HashMap<>(), phone, refreshTokenExpiration);
+    public String generateRefreshToken(User user) {
+        return createToken(new HashMap<>(), user.getId().toString(), refreshTokenExpiration);
     }
 
     private String createToken(Map<String, Object> claims, String subject, long expiration) {
@@ -49,5 +50,4 @@ public class JwtService {
         byte[] keyBytes = Decoders.BASE64.decode(secretKey);
         return Keys.hmacShaKeyFor(keyBytes);
     }
-
 }

@@ -19,7 +19,5 @@ public class LoginRequest {
     // Password: Solo requerido si no es inicio de sesión con Google
     @Size(min = 8, message = "La contraseña debe tener al menos 8 caracteres")
     private String password;
-
-    // Login Social: El ID único o Token de Google
-    private String googleId;
+    
 }
