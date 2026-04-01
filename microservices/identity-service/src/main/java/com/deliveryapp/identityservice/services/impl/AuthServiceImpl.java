@@ -7,6 +7,8 @@ import com.deliveryapp.identityservice.dtos.response.AuthResponse;
 import com.deliveryapp.identityservice.events.UserCreatedEvent;
 import com.deliveryapp.identityservice.models.User;
 import com.deliveryapp.identityservice.repositories.UserRepository;
+import com.deliveryapp.identityservice.repositories.RefreshTokenRepository; // 🛡️ Import de Base de Datos
+import com.deliveryapp.identityservice.security.JwtBlacklistService;
 import com.deliveryapp.identityservice.security.JwtService;
 import com.deliveryapp.identityservice.services.AuthService;
 import com.google.api.client.googleapis.auth.oauth2.GoogleIdToken;
@@ -16,6 +18,7 @@ import com.google.api.client.json.gson.GsonFactory;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -30,11 +33,21 @@ public class AuthServiceImpl implements AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final RabbitTemplate rabbitTemplate;
+    private final RefreshTokenRepository refreshTokenRepository;
+    private final JwtBlacklistService jwtBlacklistService;
+
+    @Value("${jwt.access-token-expiration}")
+    private long accessTokenDurationMs;
+
+    @Value("${google.client.id}")
+    private String googleClientId;
+
+    @Value("${jwt.refresh-token-expiration}")
+    private long refreshTokenDurationMs;
 
     @Override
-    @Transactional // Asegura que si falla el envío del evento, no se guarde el usuario (Consistencia)
+    @Transactional
     public AuthResponse register(RegisterRequest request) {
-        // 1. Validar existencia previa
         if (request.getPhone() != null && userRepository.existsByPhone(request.getPhone())) {
             throw new RuntimeException("El número de teléfono ya está registrado");
         }
@@ -43,20 +56,18 @@ public class AuthServiceImpl implements AuthService {
             throw new RuntimeException("El correo electrónico ya está registrado");
         }
 
-        // 2. Mapear y Encriptar contraseña con BCrypt (Ajustado a los nuevos campos)
         User user = User.builder()
                 .fullName(request.getFullName())
                 .phone(request.getPhone())
                 .email(request.getEmail())
                 .password(request.getPassword() != null ? passwordEncoder.encode(request.getPassword()) : null)
                 .role(request.getRole())
-                .authProvider("LOCAL") // Etiquetamos como usuario nativo
-                .tenantId(request.getTenantId()) // Ya es un UUID desde el DTO
+                .authProvider("LOCAL")
+                .tenantId(request.getTenantId())
                 .build();
 
         User savedUser = userRepository.save(user);
 
-        // 3. Publicar Evento para creación automática de Wallet en el Core Transaccional
         UserCreatedEvent event = new UserCreatedEvent(
                 savedUser.getId(),
                 savedUser.getPhone(),
@@ -66,24 +77,19 @@ public class AuthServiceImpl implements AuthService {
 
         try {
             rabbitTemplate.convertAndSend("user.exchange", "user.created", event);
-            System.out.println("Evento user.created enviado para el ID: " + savedUser.getId());
         } catch (Exception e) {
             throw new RuntimeException("Error al sincronizar con el módulo financiero");
         }
 
-        // 4. Generar Tokens
         return generateAuthResponse(savedUser);
     }
 
-    // Login (Exclusivo para credenciales manuales ahora)
     @Override
     public AuthResponse login(LoginRequest request) {
-        // Buscamos por teléfono o por correo
         User user = userRepository.findByPhone(request.getPhone())
                 .or(() -> userRepository.findByEmail(request.getEmail()))
                 .orElseThrow(() -> new RuntimeException("Credenciales inválidas"));
 
-        // Validar clave con BCrypt
         if (user.getPassword() == null || !passwordEncoder.matches(request.getPassword(), user.getPassword())) {
             throw new RuntimeException("Credenciales inválidas");
         }
@@ -93,68 +99,73 @@ public class AuthServiceImpl implements AuthService {
 
     // Refresh Token
     @Override
-    public AuthResponse refreshToken(String refreshToken) {
-        // TODO: Validar la firma del Refresh Token y generar un nuevo Access Token
-        return null;
+    @Transactional
+    public AuthResponse refreshToken(String requestRefreshToken) {
+        com.deliveryapp.identityservice.models.RefreshToken refreshTokenEntity = refreshTokenRepository.findByToken(requestRefreshToken)
+                .orElseThrow(() -> new RuntimeException("Refresh Token no encontrado en la base de datos"));
+
+        if (refreshTokenEntity.getExpiryDate().compareTo(java.time.Instant.now()) < 0) {
+            refreshTokenRepository.delete(refreshTokenEntity);
+            throw new RuntimeException("El Refresh Token ha expirado. Por favor, inicie sesión nuevamente.");
+        }
+
+        User user = refreshTokenEntity.getUser();
+        return generateAuthResponse(user);
     }
 
-    // Logout
     @Override
     public void logout(String accessToken) {
-        System.out.println("Token enviado a lista negra: " + accessToken);
+
+        // En un caso real más avanzado, aquí desencriptaríamos el token para
+        // ver exactamente cuántos milisegundos le quedan.
+        // Por ahora, para asegurar, lo bloqueamos por el tiempo máximo que dura un Access Token (15 min).
+        jwtBlacklistService.addToBlacklist(accessToken, accessTokenDurationMs);
+
+        System.out.println("Access Token bloqueado en Redis exitosamente: " + accessToken);
     }
 
-    // Google Auth (Registro y Login Automático)
     @Override
     @Transactional
     public AuthResponse googleAuth(GoogleAuthRequest request) {
         try {
-            // 1. Configuramos el verificador (Debes poner tu Client ID de Google Cloud aquí)
-            String googleClientId = "TU_CLIENT_ID_DE_GOOGLE.apps.googleusercontent.com";
             GoogleIdTokenVerifier verifier = new GoogleIdTokenVerifier.Builder(new NetHttpTransport(), new GsonFactory())
                     .setAudience(Collections.singletonList(googleClientId))
                     .build();
 
-            // 2. Verificamos el token criptográficamente con Google
             GoogleIdToken idToken = verifier.verify(request.getIdToken());
             if (idToken == null) {
                 throw new RuntimeException("Token de Google inválido o expirado");
             }
 
-            // 3. Extraemos los datos seguros desde Google
             GoogleIdToken.Payload payload = idToken.getPayload();
             String email = payload.getEmail();
             String googleId = payload.getSubject();
             String name = (String) payload.get("name");
             String pictureUrl = (String) payload.get("picture");
 
-            // 4. Buscamos si el usuario ya existe por correo o por providerId
             User user = userRepository.findByEmail(email).orElse(null);
 
             if (user == null) {
-                // ES UN USUARIO NUEVO -> LO REGISTRAMOS CON LA ESTRUCTURA CORRECTA
                 if (request.getPhone() == null || request.getRole() == null) {
                     throw new RuntimeException("Es un usuario nuevo. Se requiere el teléfono y el rol para completar el registro.");
                 }
 
                 user = User.builder()
                         .email(email)
-                        .providerId(googleId) // Guardamos el ID de Google aquí
-                        .authProvider("GOOGLE") // Marcamos el origen
+                        .providerId(googleId)
+                        .authProvider("GOOGLE")
                         .fullName(name)
                         .profileImage(pictureUrl)
                         .phone(request.getPhone())
                         .role(request.getRole())
-                        .password(passwordEncoder.encode(UUID.randomUUID().toString())) // Clave aleatoria por seguridad
+                        .password(passwordEncoder.encode(UUID.randomUUID().toString()))
                         .build();
 
                 user = userRepository.save(user);
 
-                // DISPARAMOS EL EVENTO
                 rabbitTemplate.convertAndSend("user.exchange", "user.created",
                         new UserCreatedEvent(user.getId(), user.getPhone(), user.getEmail(), user.getRole()));
             } else {
-                // EL USUARIO EXISTE -> ACTUALIZAMOS SU PROVIDER ID SI LE FALTABA
                 if (user.getProviderId() == null) {
                     user.setProviderId(googleId);
                     user.setAuthProvider("GOOGLE");
@@ -162,7 +173,6 @@ public class AuthServiceImpl implements AuthService {
                 }
             }
 
-            // 5. GENERAMOS NUESTRO PROPIO JWT REUTILIZANDO EL HELPER
             return generateAuthResponse(user);
 
         } catch (Exception e) {
@@ -170,11 +180,19 @@ public class AuthServiceImpl implements AuthService {
         }
     }
 
-    // Helper para generar el AuthResponse con JWT (Ajustado para recibir el Objeto User)
     private AuthResponse generateAuthResponse(User user) {
-        // Ahora le pasamos el objeto entero como configuramos en el JwtService
         String accessToken = jwtService.generateAccessToken(user);
         String refreshToken = jwtService.generateRefreshToken(user);
+
+        refreshTokenRepository.deleteByUser(user);
+
+        com.deliveryapp.identityservice.models.RefreshToken rt = com.deliveryapp.identityservice.models.RefreshToken.builder()
+                .user(user)
+                .token(refreshToken)
+                .expiryDate(java.time.Instant.now().plusMillis(refreshTokenDurationMs))
+                .build();
+
+        refreshTokenRepository.save(rt);
 
         return AuthResponse.builder()
                 .accessToken(accessToken)
