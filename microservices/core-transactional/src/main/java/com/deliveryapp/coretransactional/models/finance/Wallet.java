@@ -34,6 +34,10 @@ public class Wallet {
     @Column(name = "balance", precision = 10, scale = 2, nullable = false)
     private BigDecimal balance = BigDecimal.ZERO; // Valor predeterminado a 0.00
 
+    @Version
+    @Column(name = "version")
+    private Long version;
+
     //Timestamps para auditoría
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)

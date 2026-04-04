@@ -197,16 +197,24 @@ public class ServiceOrderServiceImpl implements ServiceOrderService {
 
         // A. VIAJE FINALIZADO CON ÉXITO
         if (targetStatus.getCode().equals("DELIVERED") && order.getDriverId() != null) {
-            // 1. Pago al conductor
-            walletService.transferFunds(
-                    order.getClientId(), order.getDriverId(), order.getTotalAmount(),
-                    "Pago finalizado por el pedido/flete: " + order.getId(), "ORDER_PAYMENT"
-            );
-            // 2. Cobro de comisión SaaS
-            BigDecimal saasFee = new BigDecimal("0.25");
+
+            // ¡Atención! El cliente pagó en EFECTIVO físico mano a mano.
+            // No hacemos transferencias digitales desde el cliente.
+
+            // 1. Comisión SaaS de la plataforma cobrada al conductor (Ej: $0.25)
+            BigDecimal driverCommission = new BigDecimal("0.25");
+
+            // 2. Tarifa de Servicio que el cliente ya le pagó en efectivo al conductor (Ej: $0.25)
+            BigDecimal clientServiceFee = new BigDecimal("0.25");
+
+            // 3. Sumamos lo que la plataforma debe recuperar de la billetera del conductor
+            BigDecimal totalToDebit = driverCommission.add(clientServiceFee);
+
             DebitWalletRequest debitReq = new DebitWalletRequest();
-            debitReq.setAmount(saasFee);
-            debitReq.setDescription("Comisión logística SaaS por pedido/flete: " + order.getId());
+            debitReq.setAmount(totalToDebit);
+            debitReq.setDescription("Débito por Comisión SaaS y Tarifa de Servicio recaudada en viaje: " + order.getId());
+
+            // 4. Se lo debitamos de un solo golpe a la billetera pre-cargada
             walletService.debitWallet(order.getDriverId(), debitReq);
         }
 

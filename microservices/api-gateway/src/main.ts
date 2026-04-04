@@ -8,33 +8,21 @@ import { globalLogger } from './middlewares/logger.middleware';
 import { tenantMiddleware } from './middlewares/tenant.middleware';
 import { stripInternalHeaders } from './middlewares/strip-headers.middleware';
 
-// Importamos el sanitizador (usamos require para evitar problemas de tipado en TS)
 const xssClean = require('xss-clean');
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  // ==========================================
-  // CAPAS DE SEGURIDAD Y MIDDLEWARES GLOBALES
-  // ==========================================
-
-  // 12. Headers de Seguridad (Helmet)
-  app.use(helmet());
-
-  // 7. Logging Global (Registra cada petición)
-  app.use(globalLogger);
-
-  // 6. Multi-Tenant (Inyecta la ciudad/franquicia)
-  app.use(tenantMiddleware);
-
-  // 11. Sanitización Anti-XSS (Limpia scripts maliciosos de los inputs)
-  app.use(xssClean());
+  // 1.(Bloquea inyecciones de headers)
 
   app.use(stripInternalHeaders);
 
-  // 13. Límite de Payload (Anti-Spam de archivos gigantes)
-  app.use(express.json({ limit: '500kb' }));
-  app.use(express.urlencoded({ extended: true, limit: '500kb' }));
+  // 2. CAPAS DE SEGURIDAD Y LOGGING
+
+  app.use(helmet());
+  app.use(xssClean());
+  app.use(tenantMiddleware);
+  app.use(globalLogger);
 
   // 3. CORS Estricto
   app.enableCors({
@@ -47,7 +35,16 @@ async function bootstrap() {
     credentials: true,
   });
 
-  // 4. Validación Global y Limpieza de DTOs
+  // 4. EL PROXY / ENRUTAMIENTO (¡CLAVE!)
+
+  setupProxies(app);
+
+  // 5. CONSUMO DE BODY Y VALIDACIÓN LOCAL
+  // Esto solo afectará a las rutas que el proxy NO atrapó
+  // (por ejemplo, si en el futuro haces un AppController local en NestJS)
+  app.use(express.json({ limit: '500kb' }));
+  app.use(express.urlencoded({ extended: true, limit: '500kb' }));
+
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
@@ -56,15 +53,7 @@ async function bootstrap() {
     }),
   );
 
-  // ==========================================
-  // REGLAS DE ENRUTAMIENTO
-  // ==========================================
-
-  setupProxies(app);
-
   await app.listen(3000);
-  console.log(
-    'API Gateway blindado, sanitizado y escuchando en http://localhost:3000',
-  );
+  console.log('API Gateway blindado y escuchando en http://localhost:3000');
 }
 bootstrap();

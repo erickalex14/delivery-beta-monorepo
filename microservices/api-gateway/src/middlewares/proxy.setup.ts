@@ -33,7 +33,7 @@ export function setupProxies(app: INestApplication) {
   app.use(
     '/api/v1/logistic/service-orders',
     validateJwtToken,
-    requireRoles(['DRIVER', 'ADMIN']), //Solo choferes y admins
+    requireRoles(['DRIVER', 'ADMIN', 'MERCHANT', 'CLIENT']),
   );
   app.use(
     '/api/v1/logistic/service-orders',
