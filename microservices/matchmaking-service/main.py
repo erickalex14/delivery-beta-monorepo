@@ -2,52 +2,52 @@ from fastapi import FastAPI
 from contextlib import asynccontextmanager
 import asyncio
 import aio_pika
-import os
-from dotenv import load_dotenv
-from uvicorn.main import print_version
+import json
+from app.core.config import settings
+from app.schemas.payload import OrderCreatedPayload
 
-load_dotenv()
-#Worker Consumidor de RabbitMQ
+
 async def consume_messages():
-    rabbitmq_url = os.getenv("RABBITMQ_URL")
-    if not rabbitmq_url:
-        print("RABBITMQ_URL not set")
-        return
-
     try:
-        #Hacemos que conecte automaticamente si rabbitmq se reincia
-        connection = await aio_pika.connect_robust(rabbitmq_url)
+        connection = await aio_pika.connect_robust(settings.RABBITMQ_URL)
         channel = await connection.channel()
-
-        #Deecalarar la cola exclusiva pa este microservicio
         queue = await channel.declare_queue("matchmaking_queue", durable=True)
-        print("Motor de Matchmaking escuchando en rabbitmq")
 
-        #Escuchar mensajes infinitamente
+        print("Motor de Matchmaking (Python) escuchando en RabbitMQ...")
+
         async with queue.iterator() as queue_iter:
             async for message in queue_iter:
-                async with message.process(): # .process() hace el ACK automático si no hay errores
-                    print("Python Matchmaking recibió mensaje:", {message.body.decode()})
-                    # Aquí iría la lógica de postgis y el algoritmo cascada despues
-    except Exception as e:
-        print("Error en el consumidor de RabbitMQ:", {e})
+                async with message.process():
+                    # 1. Decodificamos el JSON
+                    raw_data = json.loads(message.body.decode())
 
-#Ciclo de vida de la app
+                    # 2. Magia de Pydantic: Validamos que el JSON tenga la estructura correcta
+                    try:
+                        # Asumimos que Nest/Java manda algo como { pattern: "order.created", data: {...} }
+                        event_data = raw_data.get("data", raw_data)
+                        payload = OrderCreatedPayload(**event_data)
+                        print(f"Nuevo viaje validado: ID {payload.order_id} Tipo: {payload.order_type}")
+                        print(f"Origen: Lat {payload.origin.lat}, Lng {payload.origin.lng}")
+
+                        # ¡Aquí llamaremos a geo_engine.py para buscar motos!
+
+                    except Exception as validation_error:
+                        print(f"Error de validación, el JSON está mal formado: {validation_error}")
+
+    except Exception as e:
+        print(f"Error conectando a RabbitMQ: {e}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    #Cuando el server arranca
     task = asyncio.create_task(consume_messages())
     yield
-    #cuando se apaga
     task.cancel()
 
 
-#Instanciar FastApi
 app = FastAPI(title="Matchmaking Dispatch Engine", lifespan=lifespan)
 
 
-#Endpoint de check de salud
 @app.get("/health")
 def health_check():
-    return {"status": "El cerebro de Python está vivo"}
-
+    return {"status": "El cerebro de Python está vivo "}
