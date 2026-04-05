@@ -8,19 +8,16 @@ import { globalLogger } from './middlewares/logger.middleware';
 import { tenantMiddleware } from './middlewares/tenant.middleware';
 import { stripInternalHeaders } from './middlewares/strip-headers.middleware';
 
-const xssClean = require('xss-clean');
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  // 1.(Bloquea inyecciones de headers)
-
+  // 1. EL GUARDIÁN SILENCIOSO
   app.use(stripInternalHeaders);
 
   // 2. CAPAS DE SEGURIDAD Y LOGGING
-
   app.use(helmet());
-  app.use(xssClean());
   app.use(tenantMiddleware);
   app.use(globalLogger);
 
@@ -35,13 +32,10 @@ async function bootstrap() {
     credentials: true,
   });
 
-  // 4. EL PROXY / ENRUTAMIENTO (¡CLAVE!)
-
+  // 4. EL PROXY / ENRUTAMIENTO
   setupProxies(app);
 
   // 5. CONSUMO DE BODY Y VALIDACIÓN LOCAL
-  // Esto solo afectará a las rutas que el proxy NO atrapó
-  // (por ejemplo, si en el futuro haces un AppController local en NestJS)
   app.use(express.json({ limit: '500kb' }));
   app.use(express.urlencoded({ extended: true, limit: '500kb' }));
 
@@ -53,7 +47,24 @@ async function bootstrap() {
     }),
   );
 
+  // ==========================================
+  // CONFIGURACIÓN DE SWAGGER
+  // ==========================================
+  const config = new DocumentBuilder()
+    .setTitle('API Gateway - Nebula')
+    .setDescription(
+      'Documentación de los endpoints locales del Gateway (Proxy Auth y Orquestación)',
+    )
+    .setVersion('1.0')
+    .addBearerAuth() // Le pone el candadito para enviar JWT
+    .build();
+
+  const document = SwaggerModule.createDocument(app, config);
+  // La interfaz gráfica vivirá en http://localhost:3000/api-docs
+  SwaggerModule.setup('api-docs', app, document);
+
   await app.listen(3000);
   console.log('API Gateway blindado y escuchando en http://localhost:3000');
+  console.log('Swagger Gateway corriendo en http://localhost:3000/api-docs');
 }
 bootstrap();
