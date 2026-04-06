@@ -3,8 +3,11 @@ from contextlib import asynccontextmanager
 import asyncio
 import aio_pika
 import json
+
 from app.core.config import settings
 from app.schemas.payload import OrderCreatedPayload
+from app.db.session import AsyncSessionLocal
+from app.services.dispatcher import dispatcher
 
 
 async def consume_messages():
@@ -18,21 +21,25 @@ async def consume_messages():
         async with queue.iterator() as queue_iter:
             async for message in queue_iter:
                 async with message.process():
-                    # 1. Decodificamos el JSON
                     raw_data = json.loads(message.body.decode())
 
-                    # 2. Magia de Pydantic: Validamos que el JSON tenga la estructura correcta
                     try:
-                        # Asumimos que Nest/Java manda algo como { pattern: "order.created", data: {...} }
+                        # Extraemos la data y el patrón del mensaje de NestJS/Java
+                        pattern = raw_data.get("pattern")
                         event_data = raw_data.get("data", raw_data)
                         payload = OrderCreatedPayload(**event_data)
-                        print(f"Nuevo viaje validado: ID {payload.order_id} Tipo: {payload.order_type}")
-                        print(f"Origen: Lat {payload.origin.lat}, Lng {payload.origin.lng}")
 
-                        # ¡Aquí llamaremos a geo_engine.py para buscar motos!
+                        # Filtramos qué eventos nos interesan para despachar
+                        if pattern in ["order.ride.created", "order.delivery.ready"]:
+
+                            # 🗄Abrimos una sesión de base de datos corta y segura
+                            async with AsyncSessionLocal() as db:
+                                await dispatcher.process_dispatch(payload, db)
+                        else:
+                            print(f"Evento ignorado: {pattern}")
 
                     except Exception as validation_error:
-                        print(f"Error de validación, el JSON está mal formado: {validation_error}")
+                        print(f"Error procesando el mensaje: {validation_error}")
 
     except Exception as e:
         print(f"Error conectando a RabbitMQ: {e}")
