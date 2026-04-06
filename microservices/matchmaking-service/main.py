@@ -3,11 +3,16 @@ from contextlib import asynccontextmanager
 import asyncio
 import aio_pika
 import json
+import logging
 
 from app.core.config import settings
 from app.schemas.payload import OrderCreatedPayload
 from app.db.session import AsyncSessionLocal
 from app.services.dispatcher import dispatcher
+from app.rabbitmq.publisher import publisher
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 
 async def consume_messages():
@@ -16,7 +21,7 @@ async def consume_messages():
         channel = await connection.channel()
         queue = await channel.declare_queue("matchmaking_queue", durable=True)
 
-        print("Motor de Matchmaking (Python) escuchando en RabbitMQ...")
+        logger.info("Matchmaking Engine (Python) listening on RabbitMQ...")
 
         async with queue.iterator() as queue_iter:
             async for message in queue_iter:
@@ -24,32 +29,36 @@ async def consume_messages():
                     raw_data = json.loads(message.body.decode())
 
                     try:
-                        # Extraemos la data y el patrón del mensaje de NestJS/Java
                         pattern = raw_data.get("pattern")
                         event_data = raw_data.get("data", raw_data)
                         payload = OrderCreatedPayload(**event_data)
 
-                        # Filtramos qué eventos nos interesan para despachar
                         if pattern in ["order.ride.created", "order.delivery.ready"]:
-
-                            # 🗄Abrimos una sesión de base de datos corta y segura
                             async with AsyncSessionLocal() as db:
                                 await dispatcher.process_dispatch(payload, db)
                         else:
-                            print(f"Evento ignorado: {pattern}")
+                            logger.debug(f"Event ignored: {pattern}")
 
                     except Exception as validation_error:
-                        print(f"Error procesando el mensaje: {validation_error}")
+                        logger.error(f"Error processing message: {validation_error}")
 
     except Exception as e:
-        print(f"Error conectando a RabbitMQ: {e}")
+        logger.error(f"Error connecting to RabbitMQ Consumer: {e}")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # 1. Start outgoing connection (Publisher)
+    await publisher.connect()
+
+    # 2. Start incoming connection (Consumer)
     task = asyncio.create_task(consume_messages())
+
     yield
+
+    # 3. Graceful shutdown
     task.cancel()
+    await publisher.close()
 
 
 app = FastAPI(title="Matchmaking Dispatch Engine", lifespan=lifespan)
@@ -57,4 +66,4 @@ app = FastAPI(title="Matchmaking Dispatch Engine", lifespan=lifespan)
 
 @app.get("/health")
 def health_check():
-    return {"status": "El cerebro de Python está vivo "}
+    return {"status": "Matchmaking Engine is running"}

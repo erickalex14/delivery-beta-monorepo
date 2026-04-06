@@ -1,8 +1,7 @@
-from sqlalchemy import false
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from app.core.config import settings
 
-#1 Creamos motor asincrono conectando a Postgre locla por ahora
+# 1. Creamos motor asíncrono conectando a Postgres local por ahora
 engine = create_async_engine(
     settings.DATABASE_URL,
     echo=False,
@@ -11,15 +10,15 @@ engine = create_async_engine(
     max_overflow=10,
 )
 
-#2 Favrica de sesiones para consultas
-AsyncSessionLocal = sessionmaker(
+# 2. Fábrica de sesiones asíncronas para consultas
+AsyncSessionLocal = async_sessionmaker(
     bind=engine,
     class_=AsyncSession,
     expire_on_commit=False,
     autoflush=False,
 )
 
-#3Funcion generadora para abrir y cerrar conexion a la DB
+# 3. Función generadora para abrir y cerrar conexión a la DB
 async def get_db():
     async with AsyncSessionLocal() as session:
         try:
